@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,8 +18,11 @@ class Context:
     _components: list[Component] | None = field(default=None, repr=False)
 
     def components(self) -> list[Component]:
+        """All parseable components (cached). Unparseable files are reported on stderr."""
         if self._components is None:
             self._components = load_cmdb(self.root)
+            for error in load_cmdb.errors:
+                print(f"warning: skipped {error} (see `dotinfra lint`)", file=sys.stderr)
         return self._components
 
     def component(self, component_id: str) -> Component:

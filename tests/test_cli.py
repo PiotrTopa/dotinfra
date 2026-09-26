@@ -76,6 +76,21 @@ class BrowseTest(IsolatedTestCase):
         self.assertEqual(code, 1)
         self.assertIn("run `dotinfra init`", err)
 
+    def test_unparseable_files_are_reported_not_hidden(self):
+        self.write(self.root, "servers/broken.md", "---\na: |\n  x\n---\n")
+        code, out, err = run_cli("--root", self.root, "ls")
+        self.assertEqual(code, 0)
+        self.assertIn("web1", out)
+        self.assertIn("servers/broken.md:2", err)
+        self.assertIn("dotinfra lint", err)
+
+    def test_os_errors_are_friendly(self):
+        blocker = self.write(self.tmp, "blocker", "not a directory\n")
+        code, _, err = run_cli("init", blocker / "cmdb")
+        self.assertEqual(code, 1)
+        self.assertTrue(err.startswith("dotinfra: error: "), err)
+        self.assertNotIn("Traceback", err)
+
 
 class DoctorTest(IsolatedTestCase):
     def test_doctor_on_fresh_cmdb(self):

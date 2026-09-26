@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -228,7 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except DotinfraError as exc:
+    except BrokenPipeError:  # e.g. `dotinfra ls | head`
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
+    except (DotinfraError, OSError) as exc:
         print(f"dotinfra: error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
