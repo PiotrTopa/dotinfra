@@ -10,7 +10,9 @@ the same change.
 **self-maintaining infrastructure CMDB** that humans and AI coding agents share:
 
 - one Markdown file per component (server, network, domain, router, service, device),
-  with a small **YAML frontmatter** block for machine-readable facts and free prose below;
+  with a small **YAML frontmatter** block for machine-readable facts and a short
+  fact sheet of the **current state** below (section 3.3);
+- an **event log** for what happened (Grafana annotations or `events/<YYYY>.md`, section 14);
 - **agent rules** (`AGENTS.md` + bundled Agent Skills) that make every agent
   *read the CMDB first* and *write reality back* after each change;
 - a **secret vault** so docs reference secret *keys*, never values;
@@ -37,6 +39,7 @@ generated artifacts are reproducible; nothing secret is ever written to the CMDB
 ├── INDEX.md              # generated inventory (dotinfra index)
 ├── .claude/skills/  .agents/skills/   # optional project-scope Agent Skills (section 11)
 ├── servers/  networks/  domains/  routers/  services/  devices/
+├── events/               # file events backend only: <YYYY>.md event log (section 14)
 └── .dotinfra/state/      # local, untracked: sync logs, last-probe facts
 ```
 
@@ -45,7 +48,8 @@ outside the markers belongs to the user.
 
 Folder ↔ kind mapping: `servers/→server`, `networks/→network`, `domains/→domain`,
 `routers/→router`, `services/→service`, `devices/→device`. Any `*.md` in these
-folders is a component. Files at the root (README, AGENTS, CLAUDE, INDEX) are not.
+folders is a component. Files at the root (README, AGENTS, CLAUDE, INDEX) and
+under `events/` are not.
 Files ending in `.local.md` are ignored by git and by the loader.
 
 ## 3. Component file format
@@ -75,15 +79,11 @@ updated: 2026-09-23
 
 ## Overview
 ...
-## Configuration
-...
 ## Access
 ...
-## Secrets
+## Configuration
 ...
-## Known issues
-...
-## History
+## Constraints & known issues
 ...
 ```
 
@@ -127,12 +127,26 @@ back deterministically, preserving key order of the input dict.
 
 Unknown keys are allowed (warning only with `lint --strict`).
 
-### 3.3 Body conventions
+### 3.3 Body conventions: documents state what IS
 
-Recommended H2 sections (templates contain them): Overview, Configuration, Access,
-Secrets, Known issues, History. `History` is an append-only, newest-first bullet
-list of dated entries (`- 2026-09-23 — upgraded NVIDIA driver to 615`). The
-reconciler (section 7) relies on H2 sections as merge units.
+A component body is a **concise fact sheet of the current state**. Agents read
+component docs on every infra task, so every line costs context; a doc holds
+what someone would act on today, nothing else.
+
+- Recommended H2 sections (templates contain them, in this order): `Overview`
+  (2–3 lines), `Access` (how to get in; vault key names and what they unlock),
+  `Configuration` (or `Hardware` / `Services`), `Constraints & known issues`.
+- On every change the facts are **edited in place**; nothing is appended as a
+  journal. Resolved issues are removed.
+- Events and history go to the event log (`dotinfra event add`, section 14);
+  git history keeps old versions of every doc.
+- Length: ≈ ≤ 40 lines for a simple component, ≤ 80 for a complex one; lint
+  warns above `[lint] max_lines` (section 9).
+- Templates contain no History section and no dated lines.
+
+The reconciler (section 7) relies on H2 sections as merge units. **Legacy:**
+docs written by dotinfra < 0.3 have an append-only `History` section; the
+reconciler still unions it, and lint flags it as `journal`.
 
 ## 4. Python package layout
 
@@ -160,7 +174,8 @@ src/dotinfra/
   skills.py          agent target table, detection, install (user/project scope), records
   monitoring.py      prometheus file_sd + monitoring bundle render   (lane B)
   grafana.py         fleet dashboard generator + push via API          (lane B)
-  events.py          Grafana annotation events                        (lane B)
+  events.py          `event` CLI; backend selection; Grafana annotation events (lane B)
+  eventlog.py        file events backend: events/<YYYY>.md read/write + union merge
   templates/         component templates + managed-file templates (package data)
   templates/legacy/  0.1.x renders of the managed files, for `migrate` to recognise
   skills/            -> bundled Agent Skills (package data; copy of /skills)
@@ -272,6 +287,12 @@ role = "client"                 # per device, in .dotinfra.local.toml: "server" 
 
 [skills]
 project = []                    # targets installed at project scope inside the CMDB (section 11)
+
+[events]
+backend = "auto"                # "auto" | "grafana" | "file" (section 14)
+
+[lint]
+max_lines = 120                 # `long` warning above this many body lines (section 9)
 ```
 
 ### 5.1 `.dotinfra.local.toml`
@@ -319,9 +340,9 @@ dotinfra monitoring where [--check] [--timeout S]       # service, host, URLs, t
 dotinfra monitoring setup-server [--bundle-dir DIR] [--force]   # role = server locally + render
 dotinfra grafana dashboard [--output FILE]              # fleet dashboard JSON
 dotinfra grafana push [--file FILE] [--folder TITLE] [--home]   # upload via API (credentials from vault)
-dotinfra event add --host ID --type T [--time T] [--end T] TEXT
-dotinfra event list [--host ID] [--type T] [--since T] [--limit N] [--json]
-dotinfra event rm ID
+dotinfra event add --host ID --type T [--time T] [--end T] TEXT   # backend per [events] (section 14)
+dotinfra event list [--host ID] [--type T] [--since T] [--limit N] [--json]   # same filters on both backends
+dotinfra event rm ID                     # grafana: annotation id; file: YEAR.N
 ```
 
 Every command prints expected failures as `dotinfra: error: <message>` on stderr and
@@ -372,8 +393,8 @@ Section-aware 3-way merge of one component file:
 - **Body**: split into preamble + H2 sections (`## Heading`), keyed by heading text.
   Per section 3-way: one side changed → take it; both changed identically → take it;
   section added on one side → keep it (in that side's position); deleted on one side
-  and unchanged on the other → delete; `History` sections (heading matching
-  `/^history|changelog|log$/i`) → union of bullet lines (with their indented
+  and unchanged on the other → delete; legacy `History` sections (heading matching
+  `/^history|changelog|log$/i`; kept for CMDBs written before 0.3) → union of bullet lines (with their indented
   continuation lines), de-duplicated, minus entries one side deleted, sorted
   newest-first by leading date (same day: entries new since the base first, undated
   entries last); a section deleted on one side and modified on the other → conflict;
@@ -382,6 +403,11 @@ Section-aware 3-way merge of one component file:
   addition, ours first where both added at the same spot; otherwise try a line-level
   `git merge-file` on just that section; if still conflicting → keep conflict markers
   inside that section only.
+- **Event log files** (`%P` = `events/<name>.md`): the whole file is merged like
+  a History section — union of event lines, de-duplicated, minus lines one side
+  deleted, sorted by timestamp (oldest first); non-event lines come from ours.
+  Never conflicts. The reconciler treats an add/add of the same year file the
+  same way (empty base).
 - Exit 0 when clean (write result to OURS path), 1 when conflict markers remain.
 - Content the driver cannot handle (not valid UTF-8, an I/O error) falls back to
   `git merge-file` on the whole file, so the driver never fails harder than git alone.
@@ -441,7 +467,12 @@ only of `*`, `.`, `x`, `_`, `-`, `…`), a path or variable (starts with `~`, `/
 `../`, `$`, `%`) or an `ALL_CAPS_NAME` containing an underscore.
 
 Warnings: missing `role`; missing `updated`, or older than 180 days (`stale`); no H1;
-secret key in `secrets` not present in the vault (only when the vault is readable); unknown keys (`--strict`).
+secret key in `secrets` not present in the vault (only when the vault is readable); unknown keys (`--strict`);
+`journal` — an H2 matching `history|changelog|change log|log(s)|event history|historical…`
+(case-insensitive), or more than 5 body lines starting with a date (optionally after a
+bullet), outside code fences; hint: move history to `dotinfra event add`, keep current
+facts; `long` — body longer than `[lint] max_lines` (default 120) lines.
+`events/` is not a component folder: only the secret scan reads it.
 
 ## 10. Drift
 
@@ -467,7 +498,7 @@ frontmatter):
 - `infra-vault` — secret handling rules and commands.
 - `infra-sync` — sync, conflict reconciliation procedure for agents.
 - `infra-onboard` — guided bootstrap: interview the user, discover hosts, create the CMDB.
-- `infra-monitoring` — monitoring topology, bundle, dashboards, event annotations.
+- `infra-monitoring` — monitoring topology, bundle, dashboards, the event log (both backends).
 
 Targets (`skills.TARGETS`; each path verified against the agent's docs, URL in the code):
 
@@ -519,7 +550,11 @@ whenever `[vault]` changes there.
 **`dotinfra migrate`**: (1) schema migrations `MIGRATIONS[n]: (toml_text, notes) ->
 toml_text` from the CMDB's `[cmdb] schema` (absent = 0) up to the package's
 `SCHEMA`; 0→1 writes `schema`/`min_version = "0.2.0"`, adds `[monitoring] service`
-and comments out the literal 0.1 localhost URL defaults; (2) raise `min_version` to
+and comments out the literal 0.1 localhost URL defaults; 1→2 (0.3) writes
+`schema = 2`, adds `[events] backend = "auto"` and `[lint] max_lines = 120` when
+missing, and prints a note to run `dotinfra lint` and fix `journal` warnings (or
+let an agent do it with the `infra-cmdb` skill) — component bodies are never
+rewritten; (2) raise `min_version` to
 the running release's `X.Y.0` (never lower it); (3) fill `[sync] remote_url` from
 `git remote get-url <remote>` when empty; (4) refresh managed blocks; (5) refresh
 project-scope skills and the recorded user-scope ones; (6) commit the changed
@@ -563,3 +598,27 @@ exists: the warning points at "Adopting an existing stack" in the bundle README
 override). docker is asked with a 5 s timeout; any failure means no warning. `monitoring where` prints
 service, host, both URLs, this device's role and, with `--check`, whether
 `<grafana>/api/health` and `<prometheus>/-/ready` answer (3 s timeout).
+
+## 14. Event log
+
+Component docs state what is (section 3.3); what happened goes to the event log.
+`[events] backend`:
+
+- `grafana` — organisation-wide annotations tagged `dotinfra`, `host:<id>`,
+  `type:<type>` via the Grafana API (URL from section 13, credentials from the vault).
+- `file` — `events/<YYYY>.md` in the CMDB, one file per UTC year of the event's
+  start. A header (`# Events YYYY` + an HTML comment) and one bullet per event,
+  oldest first: `- 2026-09-26T07:34Z · host · type · text`; an event with an end
+  is `- START/END · host · type · text`. Times are UTC to the minute; `·`-separated;
+  the text is one line (whitespace collapsed). `add` inserts in timestamp order.
+  Ids are `YEAR.N` (N-th event line of that file) for `event rm`. The files sync
+  with the CMDB, are union-merged (section 7), are not components (not loaded,
+  indexed or linted by component rules) and are not read by agents by default.
+- `auto` (default) — `grafana` when `[monitoring] grafana_url` is set or the
+  component named by `[monitoring] service` exists; otherwise `file`.
+  Any other value is an error.
+
+Types: `outage`, `incident`, `maintenance`, `change`, `observation`. `event list`
+applies `--host`, `--type`, `--since` (events ending at or after it) and
+`--limit` (newest N) on both backends and prints the same table; `--json` prints
+annotation-shaped objects (`id`, `time`, `timeEnd`, `tags`, `text`).

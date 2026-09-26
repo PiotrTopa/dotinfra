@@ -26,9 +26,11 @@ depends_on: [nas]
 updated: 2026-09-22
 ---
 # gpu1 — GPU workstation
-## Configuration ...   ## Known issues ...   ## History
-- 2026-09-10 — driver 560 → 570
+## Overview ...   ## Access ...   ## Configuration ...   ## Constraints & known issues ...
 ```
+
+Each file is a short fact sheet of what is true *now*; what happened goes to
+the event log (`dotinfra event add`), and git keeps every earlier version.
 
 ## Why
 
@@ -43,11 +45,15 @@ them current part of the job:
 - **Rules agents actually follow.** `AGENTS.md` (+ `CLAUDE.md` import) and
   bundled [Agent Skills](src/dotinfra/skills/) say: read the CMDB first, write reality back in
   the same turn, never write a secret.
+- **Cheap to read.** Docs state what *is*, not a diary: agents load them on
+  every task, so they stay short (≈ 40–80 lines) and current. Events go to a
+  separate log — Grafana annotations, or `events/<YYYY>.md` in the CMDB when
+  there is no Grafana — that agents query only when they need the past.
 - **Secrets stay out.** Docs reference vault *keys*; `dotinfra vault exec KEY -- CMD`
   pipes values to stdin so they never land in a transcript.
 - **Every device has the whole picture.** `dotinfra sync` commits, merges and
   pushes through a private hub or directly between peers; a merge driver
-  resolves concurrent edits per section and unions History logs.
+  resolves concurrent edits per section and unions the event log.
 - **Derived, not duplicated.** SSH config with jump hosts, Prometheus targets,
   a fleet dashboard and an inventory index are generated from the same files.
 - **Safe upgrades across devices.** `dotinfra upgrade` updates the tool and
@@ -77,6 +83,7 @@ flowchart LR
     cli -- "drift (ssh probe)" --> hosts["your hosts"]
     cli -- "monitoring targets / render" --> prom["Prometheus<br/>file_sd"]
     cli -- "grafana push, event add" --> graf["Grafana<br/>dashboard + annotations"]
+    cli -- "event add (file backend)" --> cmdb
     prom --> hosts
 ```
 
@@ -131,7 +138,7 @@ fictional [example CMDB](src/dotinfra/examples/homelab/).
 | `dotinfra init [PATH] [--example]` | create a CMDB (git repo, rules, templates, merge driver) |
 | `dotinfra new KIND ID` | new component from a template (`server`, `network`, `domain`, `router`, `service`, `device`) |
 | `dotinfra ls` / `show ID` | inventory and details, `--json` for scripts |
-| `dotinfra lint` | schema, broken references, stale docs, **leaked secrets** |
+| `dotinfra lint` | schema, broken references, stale, journal-style or overlong docs, **leaked secrets** |
 | `dotinfra index` | regenerate `INDEX.md` |
 | `dotinfra ssh-config` | `Host` blocks with `ProxyJump` from `ssh.jump` |
 | `dotinfra vault ...` | `set`, `get`, `exec KEY -- CMD`, `import` legacy JSON, `migrate --to age`, `identity`, `rekey` |
@@ -145,7 +152,7 @@ fictional [example CMDB](src/dotinfra/examples/homelab/).
 | `dotinfra monitoring render` | Prometheus + Grafana + Pushgateway compose bundle wired to the CMDB |
 | `dotinfra monitoring where` / `setup-server` | which machine runs monitoring; make this one the monitoring host |
 | `dotinfra grafana dashboard/push` | the Fleet Overview dashboard |
-| `dotinfra event add/list` | infra event log as Grafana annotations |
+| `dotinfra event add/list` | infra event log: Grafana annotations or `events/<YYYY>.md` |
 | `dotinfra doctor` | check the installation and the CMDB |
 
 ## Agent compatibility
@@ -174,7 +181,8 @@ See [docs/agents.md](docs/agents.md).
 
 **Is this Ansible/Terraform/NetBox?** No. Those describe or enforce desired state
 at scale. dotinfra is the notebook you and your agents keep about a handful to a
-few hundred machines: facts, access paths, decisions, history. It happily
+few hundred machines: current facts, access paths, constraints, plus an event
+log of what happened. It happily
 documents machines managed by Ansible.
 
 **Do I need an AI agent?** No. It is a well-structured notes folder with
@@ -188,7 +196,7 @@ and [docs/security.md](docs/security.md).
 addresses and access paths. Use a private repo or a bare repo on your own server.
 
 **What happens when two devices edit the same file?** The merge driver merges
-frontmatter per key and the body per `##` section, unions History lines, and
+frontmatter per key and the body per `##` section, unions the event log, and
 only leaves conflict markers inside the one section both sides changed
 differently. See [docs/sync.md](docs/sync.md).
 
@@ -197,7 +205,8 @@ differently. See [docs/sync.md](docs/sync.md).
 ## Documentation
 
 - [Concepts](docs/concepts.md) — components, kinds, the read-first/write-back loop
-- [Schema](docs/schema.md) — frontmatter fields and body sections
+- [Schema](docs/schema.md) — frontmatter fields, body sections, how to keep docs short
+- [Events](docs/events.md) — the event log: Grafana or `events/<YYYY>.md`
 - [Sync](docs/sync.md) — hub and peers, merge driver, conflicts, migrating
 - [Vault](docs/vault.md) — backends, `exec`, importing, age
 - [Monitoring](docs/monitoring.md) — one monitoring host, targets, bundle, dashboard, events

@@ -341,8 +341,11 @@ API with the same uid; use one method per Grafana.
 
 ## Event log
 
-Infra events are Grafana annotations tagged `dotinfra`, `host:<id>` and
-`type:<type>`; the dashboard overlays them on every graph.
+With the `grafana` events backend (the `auto` default when a monitoring
+service or URL is configured), infra events are Grafana annotations tagged
+`dotinfra`, `host:<id>` and `type:<type>`; the dashboard overlays them on every
+graph. Without Grafana they go to `events/<YYYY>.md` in the CMDB instead — same
+commands; see [events](events.md).
 
 ```sh
 dotinfra event add --host nas --type maintenance --time 2026-09-26T08:00Z --end 2026-09-26T08:40Z "replaced disk 3"
@@ -350,7 +353,7 @@ dotinfra event add --host gpu1 --type change "NVIDIA driver 560 -> 570"      # n
 dotinfra event add --host hub --type outage --time -2h --end now "provider network outage"
 echo "long text" | dotinfra event add --host pi --type observation
 dotinfra event list [--host ID] [--type T] [--since -7d] [--limit N] [--json]
-dotinfra event rm 123
+dotinfra event rm 123          # file backend: dotinfra event rm 2026.4
 ```
 
 | type | colour | for |
@@ -365,5 +368,6 @@ Times: `now`, relative (`-2h`, `30m ago`), or ISO 8601 (`2026-09-26T14:05Z`,
 `2026-09-26 16:05` in local time). `--host` should be a component id; unknown
 ids produce a warning.
 
-Events complement, not replace, the component's `## History`: the History
-line is the durable record in git, the annotation is its view on the graphs.
+Component docs hold the current state only; the event log is where history
+lives. After an event, update the affected facts in place in the component
+file — do not add a History line.

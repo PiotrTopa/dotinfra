@@ -47,12 +47,9 @@ updated: 2026-09-24
 # nas — storage and backups
 
 ## Overview
-## Configuration
 ## Access
-## Secrets
-## Known issues
-## History
-- 2026-09-24 — scrub completed, 0 errors
+## Configuration
+## Constraints & known issues
 ```
 
 Two layers:
@@ -61,9 +58,27 @@ Two layers:
   builds jump-host chains from `ssh.jump`, `monitoring targets` scrapes
   `metrics` at `address`, `lint` checks that `depends_on` points at real
   components. The syntax is a small YAML subset ([schema](schema.md)).
-- **Body** — prose for humans and agents, in fixed H2 sections. `History` is an
-  append-only, newest-first log of dated lines. The sections are also the unit
-  of merging during sync.
+- **Body** — a short fact sheet for humans and agents, in fixed H2 sections.
+  It states what *is*: facts are edited in place, resolved issues are removed,
+  and nothing is appended as a journal. The sections are also the unit of
+  merging during sync.
+
+## Documents state what is; events go to the log
+
+Agents read the component files on every infra task, so every line costs
+context. A doc that has grown into a diary of every change makes each task
+slower and more expensive, and buries the one fact that matters under ten
+that no longer do. So:
+
+- a component doc holds the **current state** only — ≈ 40 lines for a simple
+  component, 80 for a complex one;
+- **what happened** (outages, maintenance, changes, incidents, observations)
+  goes to the **event log**, `dotinfra event add` — Grafana annotations, or
+  `events/<YYYY>.md` in the CMDB for setups without Grafana
+  ([events](events.md)). Agents do not load it unless the task is about the past;
+- **old versions** of every doc are in git history (`git log -p servers/nas.md`).
+
+`dotinfra lint` warns about history sections (`journal`) and overlong docs (`long`).
 
 The id is the file name (`servers/nas.md` → `nas`), unique across the CMDB.
 
@@ -75,7 +90,7 @@ The loop that makes the CMDB self-maintaining:
 flowchart LR
     task["infra task"] --> read["read INDEX.md +<br/>component files +<br/>their dependencies"]
     read --> work["do the work<br/>(ssh, config, deploy)"]
-    work --> write["write back:<br/>facts, prose,<br/>History line, updated:"]
+    work --> write["write back:<br/>edit facts in place,<br/>updated:, event add"]
     write --> check["dotinfra lint"]
     check --> sync["dotinfra sync"]
     sync -.-> read
@@ -86,7 +101,7 @@ the next session — yours or an agent's, on this device or another — starts
 from the current truth instead of from zero.
 
 **Reality wins.** When a host contradicts its file, the file is wrong. Fix it
-(or run `dotinfra drift ID --update`) and note what drifted in History. When
+(or run `dotinfra drift ID --update`); log notable drift as an event. When
 the file describes *intended* state (a firewall rule that should exist), agents
 ask before changing the host.
 
@@ -129,4 +144,5 @@ way to check that the CMDB still describes reality.
 ## Lifecycle
 
 `status` is one of `planned` → `active` ⇄ `degraded` → `retired`. Never delete
-a component file: retire it, so its history and the references to it survive.
+a component file: retire it, so the references to it survive (and log the
+retirement with `dotinfra event add`).

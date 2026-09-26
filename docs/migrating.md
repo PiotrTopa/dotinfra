@@ -54,14 +54,16 @@ Then, as you go, move facts that tools can use into frontmatter: `ssh`
 [schema](schema.md). Leave prose where it is.
 
 Optional but valuable: regroup prose under the standard H2 sections
-(`Overview`, `Configuration`, `Access`, `Secrets`, `Known issues`, `History`).
+(`Overview`, `Access`, `Configuration`, `Constraints & known issues`).
 Sync merges per section, so this pays off as soon as two devices edit.
-Turn any changelog you kept into `## History` lines: `- 2025-11-02 — ...`,
-newest first.
+Docs state what *is*: fold any changelog you kept into current facts, and move
+events worth remembering to the event log (`dotinfra event add --time
+2025-11-02 ...`, see [events](events.md)) instead of keeping a History section.
 
 An agent does this well: *"Use the infra-cmdb skill. Convert every file in
 ~/.infra to the dotinfra schema: add frontmatter, move facts into it, keep all
-prose, don't invent facts, mark anything uncertain under Known issues."*
+current facts as a concise fact sheet, move history to `dotinfra event add`,
+don't invent facts, mark anything uncertain under Constraints & known issues."*
 
 ## 4. Lint until clean
 

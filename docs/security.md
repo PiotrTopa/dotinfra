@@ -6,7 +6,8 @@ means to act on it. This page states what is protected, how, and what is not.
 ## What is in git (and therefore on every device and the hub)
 
 - Component files: hostnames, IP addresses, network layout, open ports, OS
-  versions, SSH users, jump-host chains, known weaknesses, history.
+  versions, SSH users, jump-host chains, known weaknesses; with the file
+  events backend, the event log (`events/<YYYY>.md`).
 - `AGENTS.md`, `INDEX.md`, `.dotinfra.toml` (no secrets in it: only vault key
   *names* and paths).
 - With the age backend: `vault.age`, the **encrypted** vault.
@@ -50,7 +51,7 @@ fetched it.
 | device with a clone stolen | full-disk encryption (your responsibility); file vault is per device | that device's plaintext file vault, its age identity |
 | agent echoes a secret into a transcript or log | `vault exec` pipes to stdin; skills forbid printing; deny `vault get` in agent permissions | agent disobeys; tool output containing secrets |
 | agent writes a secret into a doc | lint fails; sync runs lint on reconcile | lint misses unusual formats |
-| agent acts on a stale or wrong doc | "reality wins" rule, `dotinfra drift`, History | agents that skip verification |
+| agent acts on a stale or wrong doc | "reality wins" rule, `dotinfra drift`, the event log | agents that skip verification |
 | malicious edit arrives via sync | every change is a git commit naming the device; review with `git log -p` | you do not review |
 | compromised peer | peers are pulled, never pushed to; merges are ordinary commits | a compromised device can push to the hub |
 | monitoring endpoints exposed | bundle README: bind to LAN/VPN, firewall exporters | Prometheus and Pushgateway have no auth |

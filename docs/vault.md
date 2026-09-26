@@ -1,7 +1,7 @@
 # Vault
 
 CMDB files never contain secret values. They name **keys**
-(`secrets: [nas_sudo]`) and explain under `## Secrets` what each key unlocks.
+(`secrets: [nas_sudo]`) and say under `## Access` what each key unlocks.
 The values live in the vault.
 
 ## Commands
@@ -111,6 +111,7 @@ Nested JSON is rejected; flatten it first (`{"nas": {"sudo": "..."}}` →
   `ha_long_lived_token`, `wg_hub_private_key`.
 - One key per credential; do not bundle `user:password` pairs — put the
   username in the component's `## Access` section.
-- After rotating: `vault set`, History line (`- 2026-09-26 — rotated router_admin`),
+- After rotating: `vault set`, record it as an event
+  (`dotinfra event add --host router --type change "rotated router_admin"`),
   sync. With the age backend, that's all other devices need.
 - `dotinfra lint` warns about keys listed in `secrets:` that the vault doesn't have.

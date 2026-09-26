@@ -74,29 +74,34 @@ by a different address (e.g. a VPS's public IP), set `ssh.host` to that.
 
 ## Body
 
+**Documents state what is; events go to the event log.** A component body is
+a concise fact sheet of the current state. Agents read these files on every
+infra task, so every line costs context: a doc should be cheap to read and
+hold only what someone would act on today.
+
 Recommended H2 sections, in this order (the templates contain them):
 
 | section | contents |
 |---|---|
-| `## Overview` | what it is, where it is, who relies on it |
-| `## Configuration` | hardware, software, paths, ports, versions |
-| `## Access` | how to get in (SSH alias, console, web UI) |
-| `## Secrets` | the vault keys and what each unlocks — never values |
-| `## Known issues` | open problems, unverified observations, workarounds |
-| `## History` | dated log, newest first |
+| `## Overview` | 2–3 lines: what it is, where it is, who relies on it |
+| `## Access` | how to get in (SSH alias, console, web UI); vault key names and what each unlocks — never values |
+| `## Configuration` (or `## Hardware`, `## Services`) | hardware, software, paths, ports, versions |
+| `## Constraints & known issues` | limits, open problems, unverified observations, workarounds |
 
-History lines look like:
+Maintaining it:
 
-```markdown
-## History
+- On every change, **edit the facts in place**: rewrite the line that is no
+  longer true. Never append a journal ("2026-09-24 — did X").
+- **Remove resolved issues.** The doc says what is wrong *now*.
+- **Events and history go to `dotinfra event add`** ([events](events.md)).
+  Git history keeps every earlier version of the doc.
+- **Length**: aim for ≈ 40 lines or fewer for a simple component, 80 for a
+  complex one. `dotinfra lint` warns above `[lint] max_lines` (default 120).
 
-- 2026-09-24 — scrub completed, 0 errors
-- 2026-08-17 — disk 3 reallocated sectors 0 → 8
-```
-
-Keep headings stable. The sync merge driver treats each H2 section as a unit
-(and merges `History`, `Changelog` or `Log` sections line by line), so renaming
-or reordering headings creates avoidable conflicts.
+Keep headings stable. The sync merge driver treats each H2 section as a unit,
+so renaming or reordering headings creates avoidable conflicts. (Docs written
+before 0.3 may still have a `History`/`Changelog`/`Log` section; the driver
+still unions those line by line, and lint flags them as `journal`.)
 
 ## Lint rules
 
@@ -114,4 +119,10 @@ or reordering headings creates avoidable conflicts.
 
 Warnings: missing `role`; missing `updated` or older than 180 days; no H1;
 a key in `secrets` that the vault does not have (when the vault is readable);
-unknown keys (with `--strict`).
+unknown keys (with `--strict`); `journal` — an H2 like `History`, `Changelog`,
+`Log`, `Event history` or `Historical ...`, or more than 5 lines starting with a
+date (move history to `dotinfra event add`, keep current facts); `long` — a
+body longer than `[lint] max_lines` (default 120).
+
+Files under `events/` are not components: they are not loaded, indexed or
+checked by the component rules (the secret scan still covers them).

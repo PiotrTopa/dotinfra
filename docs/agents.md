@@ -8,7 +8,8 @@ dotinfra gives agents two things: **rules** (always loaded) and **skills**
 `dotinfra init` writes `AGENTS.md` into the CMDB root. It tells any agent to:
 
 1. read `INDEX.md` and the relevant component files before infra work;
-2. write reality back in the same turn — facts, prose, a dated History line, `updated:`;
+2. write reality back in the same turn — edit the facts in place, set `updated:`,
+   and record what happened with `dotinfra event add` (never a journal in the doc);
 3. keep secrets in the vault and reference keys only;
 4. `dotinfra lint`, then `dotinfra sync` (and reconcile on exit code 2);
 5. treat the host as the truth when it contradicts the doc.
@@ -161,9 +162,14 @@ format can load `~/.agents/skills`.
  ## Configuration
 -- NVIDIA driver 560
 +- NVIDIA driver 570 (graphics PPA); DCGM exporter image bumped to match
- ## History
-+- 2026-09-26 — release upgrade to 24.04; driver 570; exporters verified
- - 2026-05-30 — added dcgm:9400 to metrics
+ ## Constraints & known issues
+-- driver 560 crashes the DCGM exporter after suspend
 ```
 
-Facts in frontmatter, specifics in prose, one dated History line, nothing secret.
+```sh
+dotinfra event add --host gpu1 --type maintenance "release upgrade to 24.04; driver 570"
+```
+
+Facts in frontmatter, specifics in prose edited in place, the resolved issue
+removed, the event in the event log, nothing secret. The doc stays as short
+as the component is complex: agents read it on every task.

@@ -95,10 +95,11 @@ ancestor (*base*), this device's version (*ours*) and the other device's (*their
 **Body, section by section** (split at `## ` headings)
 - changed on one side → take that side; added on one side → keep it;
 - deleted on one side and untouched on the other → delete;
-- `History` / `Changelog` / `Log` sections → union of the bullet lines,
-  de-duplicated, sorted newest first;
+- legacy `History` / `Changelog` / `Log` sections (docs from before 0.3, which
+  kept history in the doc) → union of the bullet lines, de-duplicated, sorted
+  newest first;
 - other sections changed on both sides: if both sides only *added* lines (two
-  devices each appending a `Known issues` bullet), both additions are kept,
+  devices each adding a `Constraints & known issues` bullet), both additions are kept,
   ours first; otherwise a line-level merge of just that section, and if that
   still conflicts, conflict markers appear **inside that section only**.
 
@@ -114,12 +115,11 @@ updated: 2026-09-01
 ---
 ## Configuration
 - NFS export tank/models
-## Known issues
-## History
-- 2026-09-01 — created
+## Constraints & known issues
 ```
 
-On the **laptop**, an agent enables SMB:
+On the **laptop**, an agent enables SMB (and runs `dotinfra event add --host
+nas --type change "enabled SMB share for photos"`):
 
 ```markdown
 tags: [storage, smb]
@@ -127,25 +127,20 @@ updated: 2026-09-20
 ## Configuration
 - NFS export tank/models
 - SMB share tank/photos
-## History
-- 2026-09-20 — enabled SMB share for photos
-- 2026-09-01 — created
 ```
 
-Meanwhile on the **workstation**, another agent notes a failing disk:
+Meanwhile on the **workstation**, another agent notes a failing disk (and
+records `dotinfra event add --host nas --type incident "disk 3 reallocated sectors"`):
 
 ```markdown
 status: degraded
 tags: [storage, zfs]
 updated: 2026-09-22
-## Known issues
+## Constraints & known issues
 - disk 3: 8 reallocated sectors
-## History
-- 2026-09-22 — disk 3 reallocated sectors; status degraded
-- 2026-09-01 — created
 ```
 
-Plain git would conflict on the frontmatter and History. The dotinfra driver produces:
+Plain git would conflict on the frontmatter. The dotinfra driver produces:
 
 ```markdown
 status: degraded                 # changed on one side only
@@ -154,14 +149,12 @@ updated: 2026-09-22              # both changed -> later date
 ## Configuration                 # changed on one side only
 - NFS export tank/models
 - SMB share tank/photos
-## Known issues                  # changed on one side only
+## Constraints & known issues    # changed on one side only
 - disk 3: 8 reallocated sectors
-## History                       # union, newest first
-- 2026-09-22 — disk 3 reallocated sectors; status degraded
-- 2026-09-20 — enabled SMB share for photos
-- 2026-09-01 — created
 ```
 
+With the file event backend both devices also appended to `events/2026.md`;
+that file is unioned line by line in timestamp order, so it never conflicts.
 No conflict, no human needed.
 
 ## Recovering from conflicts

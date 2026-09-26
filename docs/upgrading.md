@@ -84,6 +84,12 @@ Files from dotinfra 0.1.x have no markers. `migrate` compares each one with the
      `prometheus_url = "http://localhost:9090"` become comments, because they
      would otherwise shadow the URLs derived from the monitoring service.
      Other URLs are kept as explicit overrides.
+   - 1 → 2 (0.3.0): writes `schema = 2` and adds `[events] backend = "auto"`
+     and `[lint] max_lines = 120` when missing. Component docs are **not**
+     rewritten: 0.3 treats them as fact sheets of the current state, with
+     history in the event log ([events](events.md)). Run `dotinfra lint` and
+     fix the `journal`/`long` warnings, or ask an agent to with the
+     `infra-cmdb` skill.
 2. **Minimum version.** `[cmdb] min_version` is raised to the running release's
    `X.Y.0`. It is never lowered.
 3. **Clone URL.** If `[sync] remote_url` is empty, it is filled from
