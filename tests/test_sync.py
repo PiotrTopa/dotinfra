@@ -245,6 +245,15 @@ class SyncBehaviourTest(TwoDeviceTestCase):
         self.assertEqual(load_config(self.b).get("sync", "peers"), [])
         self.assertNotIn("laptop", git(self.b, "remote"))
 
+    def test_peer_add_rejects_option_like_names_and_urls(self):
+        for name, url in (("-f", "ssh://x/~/.infra"), ("laptop", "--mirror=push"),
+                          ("laptop", "-oProxyCommand=x")):
+            with self.subTest(name=name, url=url):
+                code, _, err = run_cli("--root", self.b, "peer", "add", "--", name, url)
+                self.assertEqual(code, 1)
+                self.assertIn("invalid peer", err)
+        self.assertEqual(git(self.b, "remote").split(), ["origin"])
+
 
 class HelpersTest(IsolatedTestCase):
     def test_commit_message(self):

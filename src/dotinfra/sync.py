@@ -39,7 +39,8 @@ class GitError(DotinfraError):
 
 def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     try:
-        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True,
+                                encoding="utf-8", errors="replace")
     except FileNotFoundError:
         raise GitError("git is not installed or not on PATH") from None
     if check and result.returncode != 0:
@@ -168,9 +169,13 @@ def _require_repo(ctx: Context) -> None:
 
 
 def resolve_conflicts(ctx: Context, files: list[str]) -> list[str]:
-    """Try the reconciler on conflicted files; return the ones still conflicted."""
+    """Try the reconciler on conflicted files; return the ones still conflicted.
+
+    ``INDEX.md`` is never hand-merged: it is regenerated last, once the component
+    files it is derived from have been reconciled.
+    """
     remaining = []
-    for rel in files:
+    for rel in sorted(files, key=lambda f: f == INDEX_NAME):
         if rel == INDEX_NAME:
             write_index(ctx.root, ctx.config.get("cmdb", "name", "home"))
             git(ctx.root, "add", "--", rel)
@@ -182,10 +187,16 @@ def resolve_conflicts(ctx: Context, files: list[str]) -> list[str]:
 
 
 def _reconcile_file(root: Path, rel: str) -> bool:
-    stages = [git(root, "show", f":{n}:{rel}", check=False) for n in (1, 2, 3)]
-    if any(stage.returncode != 0 for stage in stages):
-        return False  # added/deleted on one side: needs a human decision
-    result = merge_text(*(stage.stdout for stage in stages))
+    stages = []
+    for n in (1, 2, 3):
+        blob = subprocess.run(["git", "-C", str(root), "show", f":{n}:{rel}"], capture_output=True)
+        if blob.returncode != 0:
+            return False  # added/deleted on one side: needs a human decision
+        try:
+            stages.append(blob.stdout.decode("utf-8"))
+        except UnicodeDecodeError:
+            return False  # not text we understand; git's own markers stay
+    result = merge_text(*stages)
     (root / rel).write_text(result.text, encoding="utf-8")
     return result.clean
 
@@ -396,10 +407,12 @@ def cmd_peer_add(args) -> int:
     _require_repo(ctx)
     if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", args.name):
         raise DotinfraError(f"invalid peer name {args.name!r}")
+    if args.url.startswith("-") or not args.url.strip():
+        raise DotinfraError(f"invalid peer URL {args.url!r} (e.g. ssh://laptop/~/.infra)")
     if args.name in remote_names(ctx.root):
-        git(ctx.root, "remote", "set-url", args.name, args.url)
+        git(ctx.root, "remote", "set-url", "--", args.name, args.url)
     else:
-        git(ctx.root, "remote", "add", args.name, args.url)
+        git(ctx.root, "remote", "add", "--", args.name, args.url)
     peers = [str(p) for p in ctx.config.get("sync", "peers", [])]
     if args.name not in peers:
         set_toml_value(ctx.root / CONFIG_NAME, "sync", "peers", peers + [args.name])
