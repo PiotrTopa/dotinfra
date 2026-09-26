@@ -58,12 +58,18 @@ always-on machines. You can combine both: a hub plus peers on the LAN.
 1. If the tree is dirty (and `auto_commit = true`): commit everything as
    `sync(<device>): 2 file(s): servers/nas.md, services/monitoring.md`.
 2. Fetch the hub remote and every peer.
-3. Merge each fetched `<remote>/main` with `git merge` (not rebase: both
+3. Check the incoming commits: if the `.dotinfra.toml` they bring asks for a
+   newer dotinfra (`[cmdb] min_version`), merge nothing and exit with code **3**.
+   Your commit from step 1 is kept for the next sync after `dotinfra upgrade`
+   (see [upgrading](upgrading.md)).
+4. Merge each fetched `<remote>/main` with `git merge` (not rebase: both
    devices' history is kept and the merge driver runs). Fast-forward when possible.
-4. On conflicts the merge driver could not resolve: stop, leave the repo mid-merge,
+5. On conflicts the merge driver could not resolve: stop, leave the repo mid-merge,
    write `.dotinfra/state/RECONCILE.md`, exit with code **2**.
-5. Regenerate `INDEX.md` if stale and commit it as `index: regenerate`.
-6. Push `main` to the hub (skip with `--no-push`). A failed fetch or push is
+6. Regenerate `INDEX.md` if stale and commit it as `index: regenerate`. On the
+   monitoring host (`[monitoring] role = "server"`), refresh the Prometheus
+   targets (see [monitoring](monitoring.md#topology-one-monitoring-host-many-devices)).
+7. Push `main` to the hub (skip with `--no-push`). A failed fetch or push is
    reported and gives exit code 1.
 
 It is idempotent and takes a lock (`.dotinfra/state/sync.lock`, stale after

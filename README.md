@@ -50,6 +50,10 @@ them current part of the job:
   resolves concurrent edits per section and unions History logs.
 - **Derived, not duplicated.** SSH config with jump hosts, Prometheus targets,
   a fleet dashboard and an inventory index are generated from the same files.
+- **Safe upgrades across devices.** `dotinfra upgrade` updates the tool and
+  migrates the CMDB. Your text outside the `dotinfra:managed` markers is left
+  alone, and a device running an older dotinfra refuses to merge a CMDB it
+  does not understand.
 - **Zero dependencies.** Python ≥ 3.11 standard library, `git`, `ssh`; `age` optional.
 
 ## Architecture
@@ -82,24 +86,29 @@ flowchart LR
 # 1. install (Python 3.11+, git)
 pipx install git+https://github.com/PiotrTopa/dotinfra      # or: curl -fsSL https://raw.githubusercontent.com/PiotrTopa/dotinfra/main/install.sh | sh
 
-# 2. create the CMDB in ~/.infra (git repo, AGENTS.md, CLAUDE.md, folders)
-#    and install the Agent Skills into ~/.claude/skills and ~/.agents/skills
-dotinfra init --name home --skills both
+# 2. create the CMDB in ~/.infra (git repo, AGENTS.md, CLAUDE.md, folders), wired to a
+#    PRIVATE hub repo, with the Agent Skills for the agents found on this machine
+#    (Claude Code, Copilot, Cline, Antigravity, Codex, Gemini CLI)
+dotinfra init --name home --remote git@github.com:alice/infra.git
 
 # 3. first component: create from the template, then fill in the facts
 dotinfra new server nas --title "nas — storage" --address 10.10.0.10
 $EDITOR ~/.infra/servers/nas.md        # status: active, role, ssh user, ...
 dotinfra lint && dotinfra index
 
-# 4. share it through a PRIVATE hub repo (GitHub/Gitea, or a bare repo on any SSH host)
-git -C ~/.infra remote add origin git@github.com:alice/infra.git
+# 4. share it through the hub (GitHub/Gitea private repo, or a bare repo on any SSH host)
 dotinfra sync                          # commit, push
 
-# 5. on the second machine: install (step 1), then
+# 5. on the second machine: follow "Start here — new machine" in the CMDB's README.md
+#    (GitHub shows it on the private repo's page); in short:
 git clone git@github.com:alice/infra.git ~/.infra
-dotinfra sync && dotinfra skills install   # registers the merge driver, installs the skills
+cd ~/.infra && dotinfra doctor && dotinfra skills install
 dotinfra timer install --interval 15m      # optional, on every machine: background sync
 ```
+
+The CMDB's own `README.md` is written for whoever finds the private repo
+later. It covers installing dotinfra, the clone URL, vault access, the
+minimum dotinfra version and which machine runs monitoring.
 
 From now on `dotinfra sync` (or the timer) keeps both copies current; edits to
 the same file on both sides are merged section by section. `dotinfra doctor`
@@ -131,21 +140,30 @@ fictional [example CMDB](src/dotinfra/examples/homelab/).
 | `dotinfra reconcile` | finish or abort a merge the driver couldn't fully resolve |
 | `dotinfra timer install` | systemd user timer (cron line printed as fallback) |
 | `dotinfra drift [ID] [--update]` | SSH probe: OS, kernel, CPUs, RAM, IPs vs. the doc |
-| `dotinfra skills install` | install the bundled Agent Skills |
+| `dotinfra skills install` | install the bundled Agent Skills for Claude Code, Copilot, Cline, Antigravity, Codex, Gemini CLI |
+| `dotinfra upgrade` / `migrate` | update dotinfra, then refresh the CMDB's managed files, schema and skills |
 | `dotinfra monitoring render` | Prometheus + Grafana + Pushgateway compose bundle wired to the CMDB |
+| `dotinfra monitoring where` / `setup-server` | which machine runs monitoring; make this one the monitoring host |
 | `dotinfra grafana dashboard/push` | the Fleet Overview dashboard |
 | `dotinfra event add/list` | infra event log as Grafana annotations |
 | `dotinfra doctor` | check the installation and the CMDB |
 
 ## Agent compatibility
 
-| agent | how it picks up the rules |
-|---|---|
-| Claude Code | `CLAUDE.md` in the CMDB imports `AGENTS.md`; skills in `~/.claude/skills` (`dotinfra skills install --target claude`) |
-| OpenAI Codex CLI | reads `AGENTS.md`; skills in `~/.agents/skills` (`--target agents`) |
-| Cursor, Cline, Windsurf | open the CMDB folder or reference `~/.infra/AGENTS.md` from your project rules |
-| Gemini CLI | add `~/.infra/AGENTS.md` as context (`contextFileName` in settings), or `@~/.infra/AGENTS.md` |
-| anything else | "Before any infra work read `~/.infra/AGENTS.md`" in its system prompt |
+| agent | rules | skills (`dotinfra skills install --target ...`) |
+|---|---|---|
+| Claude Code | `CLAUDE.md` in the CMDB imports `AGENTS.md` | `claude`: `~/.claude/skills`, `.claude/skills` |
+| GitHub Copilot | `AGENTS.md` | `copilot`: `~/.agents/skills`, `.agents/skills` |
+| Cline | global rules pointing at `~/.infra/AGENTS.md` | `cline`: `~/.cline/skills`, `.claude/skills` |
+| Google Antigravity (`agy`) | open the CMDB as the workspace | `agy`: `~/.gemini/antigravity-cli/skills`, `~/.gemini/config/skills`, `.agents/skills` |
+| OpenAI Codex CLI | reads `AGENTS.md` | `codex`: `~/.agents/skills`, `.agents/skills` |
+| Gemini CLI | `AGENTS.md` via `contextFileName` | `gemini`: `~/.agents/skills`, `.agents/skills` |
+| Cursor, Windsurf, anything else | "Before any infra work read `~/.infra/AGENTS.md`" in the rules or system prompt | `agents`: `~/.agents/skills` for tools that read it |
+
+`dotinfra init` installs the skills for the agents it detects. It installs
+them in your home directory and also inside the CMDB repository, so a fresh
+clone already has them. See the [agents guide](docs/agents.md) for each path
+and its documentation.
 
 Agents working in *other* repositories need a pointer too: add one line to your
 global agent instructions, e.g. `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`:
@@ -182,7 +200,8 @@ differently. See [docs/sync.md](docs/sync.md).
 - [Schema](docs/schema.md) — frontmatter fields and body sections
 - [Sync](docs/sync.md) — hub and peers, merge driver, conflicts, migrating
 - [Vault](docs/vault.md) — backends, `exec`, importing, age
-- [Monitoring](docs/monitoring.md) — targets, bundle, dashboard, events
+- [Monitoring](docs/monitoring.md) — one monitoring host, targets, bundle, dashboard, events
+- [Upgrading](docs/upgrading.md) — `upgrade`, `migrate`, managed blocks, the version guard
 - [Agents](docs/agents.md) — skills and wiring for each agent
 - [Security](docs/security.md) — threat model
 - [Migrating](docs/migrating.md) — from an existing notes folder

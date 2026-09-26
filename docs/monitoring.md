@@ -4,6 +4,100 @@ dotinfra can generate everything a small Prometheus + Grafana setup needs from
 the CMDB: scrape targets, a docker-compose bundle, a fleet dashboard, and an
 event log. All of it is optional.
 
+## Topology: one monitoring host, many devices
+
+Every device syncs the whole CMDB, but the Prometheus + Grafana stack runs on
+**one** machine. The CMDB records which one: `.dotinfra.toml` names a service
+component, and that component's `runs_on:` is the monitoring host.
+
+```mermaid
+flowchart LR
+    subgraph shared["shared (synced) CMDB"]
+        toml[".dotinfra.toml<br/>[monitoring] service = #quot;monitoring#quot;"]
+        svc["services/monitoring.md<br/>runs_on: nas<br/>url / prometheus_url"]
+        hosts["servers/*.md<br/>metrics: [node:9100, ...]"]
+    end
+    subgraph nas["nas — role = server (.dotinfra.local.toml)"]
+        sync1["dotinfra sync (timer)"] -- "after each merge" --> targets["bundle_dir/targets/*.json"]
+        targets --> prom["Prometheus"] --> graf["Grafana"]
+    end
+    subgraph laptop["laptop, workstation, ... — role = client"]
+        cli["dotinfra monitoring where<br/>grafana push, event add"]
+    end
+    shared <--> sync1
+    shared <--> cli
+    cli -- "URLs resolved from<br/>services/monitoring.md" --> graf
+    prom -- "scrape" --> fleet["hosts with metrics:"]
+```
+
+```yaml
+# services/monitoring.md
+id: monitoring
+kind: service
+status: active
+runs_on: nas                                # the monitoring host
+url: http://10.10.0.10:3000                 # Grafana
+prometheus_url: http://10.10.0.10:9090      # optional
+```
+
+`dotinfra monitoring where` shows what every device resolves:
+
+```text
+$ dotinfra monitoring where --check
+service           monitoring
+host              nas
+grafana           http://10.10.0.10:3000
+prometheus        http://10.10.0.10:9090
+this device       client (laptop)
+bundle_dir        /home/alice/dotinfra-monitoring  (used on the server only)
+grafana check     ok (HTTP 200)
+prometheus check  ok (HTTP 200)
+```
+
+Resolution, per URL:
+
+1. `[monitoring] grafana_url` / `prometheus_url`, if set — in `.dotinfra.toml`
+   or, for one device only, in `.dotinfra.local.toml` (e.g. a laptop that
+   reaches Grafana through a VPN address);
+2. the service component's `url` (Grafana) / `prometheus_url` (Prometheus);
+3. `http://<address>:3000` / `:9090`, where the address is the service's own
+   `address`, else the `address` of its `runs_on` server;
+4. `localhost`, with a warning.
+
+`grafana push`, `event add/list/rm` and `doctor` all use this resolution.
+
+### Setting up the monitoring host
+
+On the machine that will run the stack (once):
+
+```sh
+dotinfra monitoring setup-server        # role = "server" in .dotinfra.local.toml, renders the bundle
+cd ~/dotinfra-monitoring && cp .env.example .env    # set GRAFANA_ADMIN_PASSWORD (see below)
+docker compose up -d
+dotinfra timer install                  # sync every 15 min
+```
+
+From then on every successful `dotinfra sync` on that machine rewrites the
+Prometheus targets in `<bundle_dir>/targets` (file_sd: picked up without a
+restart). Any device can add a host to monitoring — edit its `metrics:` and
+sync — and the server applies it on its next sync.
+
+Every other device is a client (the default). On a client, `monitoring render`
+and `monitoring targets` still work but warn that the stack runs on the host
+named in the CMDB, unless you pass `--output DIR` or `--force`.
+
+`.dotinfra.local.toml` is ignored by git; it is the place for anything that
+differs per machine:
+
+```toml
+# .dotinfra.local.toml on the monitoring host
+[cmdb]
+device = "nas"
+[monitoring]
+role = "server"
+bundle_dir = "/srv/dotinfra-monitoring"
+```
+
 ## Targets from `metrics:`
 
 ```yaml
@@ -77,11 +171,10 @@ by renaming files do not leave the container with a stale copy.
 The bundle's [README](../src/dotinfra/bundle/README.md) covers installing node_exporter
 on Linux, FreeBSD and macOS and setting up the DCGM exporter.
 
-Keep targets fresh on the monitoring host with a timer or cron entry:
-
-```sh
-*/10 * * * * dotinfra sync --no-push >/dev/null 2>&1; dotinfra monitoring targets >/dev/null
-```
+Keep targets fresh on the monitoring host by marking it as the server
+(`dotinfra monitoring setup-server`) and running `dotinfra timer install`:
+each sync then refreshes the targets. (Before 0.2 this needed a separate cron
+line running `dotinfra monitoring targets`; that still works.)
 
 ## The fleet dashboard
 
@@ -108,7 +201,8 @@ dotinfra grafana push                 # generated dashboard, folder "Fleet"
 dotinfra grafana push --file my.json --folder "" --home
 ```
 
-Credentials: `[monitoring] grafana_url`, `grafana_user`, and the password from
+Credentials: the Grafana URL resolved as described under
+[Topology](#topology-one-monitoring-host-many-devices), `grafana_user`, and the password from
 the vault key named by `grafana_password_key`. To use a service-account token
 instead, store it in the vault and set `grafana_token_key = "grafana_token"`.
 The dashboard uses a `datasource` variable (default uid `dotinfra-prometheus`),

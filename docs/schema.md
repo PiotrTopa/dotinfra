@@ -56,7 +56,8 @@ flow maps (`{a: 1}`).
 | `secrets` | list | no | vault **key names** this component needs |
 | `depends_on` | list of ids | no | components this one needs |
 | `runs_on` | id | no (services) | the server hosting a service |
-| `url` | string | no | web UI or endpoint |
+| `url` | string | no | web UI or endpoint (monitoring service: the Grafana URL) |
+| `prometheus_url` | string | no | monitoring service only: the Prometheus URL (default `http://<address>:9090`) |
 | `facts` | map | no | written by `dotinfra drift --update`: hostname, kernel, arch, cpus, mem_gb, ips, probed |
 | `updated` | `YYYY-MM-DD` | recommended | last time the file was reconciled with reality |
 

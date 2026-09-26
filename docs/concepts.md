@@ -16,9 +16,14 @@ infrastructure, sorted into six folders by **kind**:
 | `devices/` | `device` | UPS, printer, camera, anything with an address or a warranty |
 
 At the root: `AGENTS.md` (rules for AI agents), `CLAUDE.md` (imports
-`AGENTS.md` for Claude Code), `README.md` (for humans), `INDEX.md` (generated
-inventory) and `.dotinfra.toml` (tool configuration). Local-only state lives in
-`.dotinfra/state/`, which git ignores.
+`AGENTS.md` for Claude Code), `README.md` (for humans, starting with how to set
+up a new machine), `INDEX.md` (generated inventory) and `.dotinfra.toml` (tool
+configuration, shared by all devices). dotinfra's own text in README, AGENTS,
+CLAUDE, `.gitignore` and `.gitattributes` sits between `dotinfra:managed`
+markers, and `dotinfra migrate` refreshes it after upgrades. Anything you write
+outside the markers stays as it is ([upgrading](upgrading.md)). Local-only
+state lives in `.dotinfra/state/` and per-device settings in
+`.dotinfra.local.toml`; git ignores both.
 
 "CMDB" (configuration management database) sounds heavy; here it just means
 *the place where the truth about your infrastructure is written down*.

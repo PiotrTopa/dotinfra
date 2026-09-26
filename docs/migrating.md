@@ -11,6 +11,9 @@ cp -a ~/notes/infra ~/infra-before-dotinfra      # safety copy
 dotinfra init ~/.infra --name home               # fresh CMDB with rules and folders
 ```
 
+Upgrading a CMDB created by an older dotinfra is a different task: see
+[upgrading](upgrading.md) (`dotinfra upgrade`, `dotinfra migrate`).
+
 If your notes already live in `~/.infra` and are a git repository, run
 `dotinfra init ~/.infra` there: existing files are left alone, and missing
 scaffolding (`.dotinfra.toml`, `AGENTS.md`, `.gitattributes`, folders) is added.
@@ -111,6 +114,8 @@ Other devices: see [sync — migrating from rsync-mirrored copies](sync.md#migra
 
 ## 7. Tell your agents
 
-`dotinfra skills install`, and add the global pointer described in
+`dotinfra skills install` (it detects Claude Code, Copilot, Cline, Antigravity,
+Codex and Gemini CLI; `--scope project` also commits the skills into the CMDB),
+and add the global pointer described in
 [agents](agents.md). From now on, agents keep the CMDB current as part of
 every infra task.
