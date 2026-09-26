@@ -21,39 +21,28 @@ updated: 2026-09-24
 
 ## Overview
 
-Small-form-factor PC with four disks in the hallway cupboard. Everything
-important lives here: family photos, the model cache for `gpu1`, and the
-offsite backup jobs. It is also the WireGuard *site gateway*: the hub routes
-`10.10.0.0/16` through it, which is what makes `ssh.jump: hub` work for LAN hosts.
-
-## Configuration
-
-- CPU: 4-core low-power x86; 32 GB ECC RAM.
-- ZFS pool `tank`: 2 x mirror of 8 TB disks. Datasets `tank/photos`,
-  `tank/models` (NFS export to `gpu1`), `tank/backup`.
-- Snapshots: hourly for 48 h, daily for 30 days (`zfs-auto-snapshot`).
-- Offsite: `restic` to object storage every night at 03:00, repository key in the vault.
-- WireGuard peer `10.99.0.2/32`, `AllowedIPs` on the hub include `10.10.0.0/16`.
-- Docker: runs the [monitoring](../services/monitoring.md) bundle.
-- NUT client for the [ups](../devices/ups.md): shuts down at 20 % battery.
+Small-form-factor PC with four disks in the hallway cupboard: family photos,
+the model cache for `gpu1`, offsite backups and the monitoring stack. Also the
+WireGuard *site gateway*: the hub routes `10.10.0.0/16` through it, which is
+what makes `ssh.jump: hub` work for LAN hosts.
 
 ## Access
 
-`ssh nas`. From outside the LAN the generated SSH config jumps through `hub`.
+`ssh nas` (through `hub` from outside the LAN). Vault: `nas_sudo` (sudo for
+`alice`), `nas_backup_passphrase` (restic repository).
 
-## Secrets
+## Configuration
 
-- `nas_sudo` — sudo password for `alice`.
-- `nas_backup_passphrase` — restic repository passphrase.
+- 4-core low-power x86, 32 GB ECC RAM.
+- ZFS pool `tank`: 2 × mirror of 8 TB disks, 61 % used. Datasets
+  `tank/photos`, `tank/models` (NFS export to `gpu1`), `tank/backup`.
+- Snapshots hourly for 48 h, daily for 30 days (`zfs-auto-snapshot`); monthly scrub.
+- Offsite: `restic` to object storage nightly at 03:00.
+- WireGuard peer `10.99.0.2/32`.
+- Docker: the [monitoring](../services/monitoring.md) bundle.
+- NUT server for the [ups](../devices/ups.md); shuts down at 20 % battery.
 
-## Known issues
+## Constraints & known issues
 
-- Disk 3 (`ata-EXAMPLE-8TB-C`) logged 8 reallocated sectors in August; watch
-  `smartctl -A` monthly, a spare disk is on the shelf.
-
-## History
-
-- 2026-09-24 — scrub completed, 0 errors; 61 % pool usage
-- 2026-08-17 — disk 3 reallocated sectors 0 → 8; added Known issues entry
-- 2026-06-05 — moved the monitoring stack here from `gpu1`
-- 2026-04-02 — enabled NFS export `tank/models` for `gpu1`
+- Disk 3 (`ata-EXAMPLE-8TB-C`) has 8 reallocated sectors: check
+  `smartctl -A` monthly; a spare disk is on the shelf.

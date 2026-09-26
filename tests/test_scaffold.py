@@ -66,6 +66,7 @@ class InitTest(IsolatedTestCase):
     def test_example(self):
         root = self.make_cmdb(use_git=False, example="homelab")
         self.assertGreater(len(load_cmdb(root)), 0)
+        self.assertTrue((root / "events" / "2026.md").is_file())
         with self.assertRaises(DotinfraError):
             self.make_cmdb("other", use_git=False, example="nope")
 

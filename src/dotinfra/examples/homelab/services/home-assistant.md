@@ -17,31 +17,22 @@ updated: 2026-09-12
 
 ## Overview
 
-Lights, heating and the washing-machine notifier. Runs on [pi](../servers/pi.md).
-Reachable remotely only over [wireguard](../networks/wireguard.md).
-
-## Configuration
-
-- Container `ghcr.io/home-assistant/home-assistant:stable`, host network,
-  config in `/srv/homeassistant`.
-- Zigbee (ZHA) on the USB coordinator; 23 devices paired.
-- Backups: built-in nightly backup plus the Pi's rsync to `nas`.
+Lights, heating and the washing-machine notifier, on [pi](../servers/pi.md).
+Remote access only over [wireguard](../networks/wireguard.md).
 
 ## Access
 
-Web UI at the `url` above. Admin user `alice` (`ha_admin` in the vault).
+Web UI at the `url` above; admin `alice` (`ha_admin` in the vault).
+`ha_long_lived_token`: API token for scripts on `nas`.
 Restart: `ssh pi 'docker restart homeassistant'`.
 
-## Secrets
+## Configuration
 
-- `ha_admin` — admin login.
-- `ha_long_lived_token` — API token used by scripts on `nas`.
+- Home Assistant 2026.9, container `ghcr.io/home-assistant/home-assistant:stable`,
+  host network, config in `/srv/homeassistant`.
+- Zigbee (ZHA) on the USB coordinator; 23 devices paired.
+- Backups: built-in nightly backup plus the Pi's rsync to `nas`.
 
-## Known issues
+## Constraints & known issues
 
 - After a Pi reboot, Zigbee devices take about two minutes to report again.
-
-## History
-
-- 2026-09-12 — updated to 2026.9; re-paired the hallway sensor
-- 2026-04-20 — migrated with the Pi to the SSD

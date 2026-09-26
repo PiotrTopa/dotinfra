@@ -21,32 +21,20 @@ updated: 2026-09-12
 
 ## Overview
 
-Raspberry Pi 4 (4 GB) with an SSD over USB 3, mounted next to the router.
-Hosts [home-assistant](../services/home-assistant.md) and a USB Zigbee stick.
-
-## Configuration
-
-- Boots from USB SSD; SD card removed.
-- Docker with Home Assistant in host network mode (`/srv/homeassistant`).
-- Zigbee coordinator on `/dev/ttyUSB0`, passed through to the container.
-- Nightly `rsync` of `/srv/homeassistant` to `nas:/tank/backup/pi/` (one-way
-  backup of data, not of the CMDB).
-- `prometheus-node-exporter` package on port 9100.
+Raspberry Pi 4 (4 GB) booting from a USB 3 SSD, next to the router. Hosts
+[home-assistant](../services/home-assistant.md) and a USB Zigbee stick.
 
 ## Access
 
-`ssh pi`.
+`ssh pi`. Vault: `pi_sudo` (sudo for `alice`).
 
-## Secrets
+## Configuration
 
-- `pi_sudo` — sudo password for `alice`.
+- Docker; Home Assistant in host network mode (`/srv/homeassistant`).
+- Zigbee coordinator on `/dev/ttyUSB0`, passed through to the container.
+- Nightly `rsync` of `/srv/homeassistant` to `nas:/tank/backup/pi/`.
+- `prometheus-node-exporter` on port 9100.
 
-## Known issues
+## Constraints & known issues
 
 - CPU throttles above 80 °C in summer; a fan case is on order.
-
-## History
-
-- 2026-09-12 — added `metrics: [node:9100]` after installing node_exporter
-- 2026-07-21 — throttling seen during a heat wave; noted in Known issues
-- 2026-04-20 — moved from SD card to USB SSD

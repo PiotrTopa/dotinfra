@@ -23,29 +23,22 @@ updated: 2026-09-05
 ## Overview
 
 Fanless mini PC with four 2.5 GbE ports running OPNsense. WAN is a fibre ONT
-with a dynamic public IP (currently `198.51.100.24`); nothing is port-forwarded
-since the WireGuard hub took over remote access.
+with a dynamic public IP (currently `198.51.100.24`).
+
+## Access
+
+Web UI at the `url` above (`router_admin` in the vault); SSH for `alice`,
+key auth only.
 
 ## Configuration
 
 - LAN `10.10.0.1/16` on `igc1`; DHCP pool `10.10.100.1`–`10.10.199.254`,
   static leases for every host in this CMDB.
-- Unbound resolver with DNS-over-TLS upstream; local zone `home.example.com`.
-- Plugin `os-node_exporter` listening on the LAN interface only.
-- Config backup: nightly to `nas` via the built-in SFTP backup.
+- No port forwards: remote access goes through `hub`.
+- Unbound resolver, DNS-over-TLS upstream; local zone `home.example.com`.
+- Plugin `os-node_exporter` on the LAN interface only.
+- Config backup nightly to `nas` (built-in SFTP backup).
 
-## Access
+## Constraints & known issues
 
-Web UI at the `url` above (login `router_admin` in the vault); SSH for
-`alice` with key auth only.
-
-## Secrets
-
-- `router_admin` — web UI admin login.
-
-## Known issues
-
-## History
-
-- 2026-09-05 — updated to 25.7; no config changes
-- 2026-03-14 — removed the port forward for SSH (replaced by `hub`)
+- Dynamic WAN IP: never point DNS at it; public names go to `hub`.

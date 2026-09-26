@@ -13,9 +13,15 @@ updated: 2026-09-20
 
 ## Overview
 
-Every peer connects to [hub](../servers/hub.md) (`vps.example.net:51820`).
-The hub forwards between peers and routes the home LAN through the
-[nas](../servers/nas.md), which acts as the site gateway.
+Hub and spoke: every peer connects to [hub](../servers/hub.md)
+(`vps.example.net:51820`), which forwards between peers and routes the home
+LAN through the [nas](../servers/nas.md) site gateway.
+
+## Access
+
+Add a peer: generate keys on the new device, add a `[Peer]` block on the hub
+and a row below, then `wg syncconf wg0 <(wg-quick strip wg0)` on the hub.
+Private keys stay on each device; the hub's is `wg_hub_private_key` in the vault.
 
 ## Configuration
 
@@ -29,20 +35,7 @@ The hub forwards between peers and routes the home LAN through the
 - `PersistentKeepalive = 25` on every spoke (NAT traversal).
 - MTU 1380 on all peers (the fibre link has a smaller MTU).
 
-## Access
+## Constraints & known issues
 
-Add a peer: generate keys on the new device, add a `[Peer]` block on the hub,
-add a row to the table above, `wg syncconf wg0 <(wg-quick strip wg0)` on the hub.
-
-## Secrets
-
-Private keys stay on each device. The hub's key is in the vault as
-`wg_hub_private_key` (see [hub](../servers/hub.md)).
-
-## Known issues
-
-## History
-
-- 2026-09-20 — hub SSH moved to 2222; WireGuard unchanged
-- 2026-05-11 — added laptop peer 10.99.0.3
-- 2026-03-14 — created
+- Everything depends on `hub`: when it is down, remote access and roaming
+  metrics are gone (the LAN itself is unaffected).

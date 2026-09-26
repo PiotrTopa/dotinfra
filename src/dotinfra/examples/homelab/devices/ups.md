@@ -12,28 +12,20 @@ updated: 2026-08-17
 
 ## Overview
 
-Rack-less tower UPS in the hallway cupboard. Powers [nas](../servers/nas.md),
-[router](../routers/router.md), the ONT and [pi](../servers/pi.md). Runtime at
-normal load is about 25 minutes.
-
-## Configuration
-
-- USB to `nas`, which runs the NUT server (`upsd`); the router and Pi are NUT clients.
-- Shutdown order at 20 % battery: pi, gpu1 (not on the UPS, signalled over LAN), nas last.
+Tower UPS in the hallway cupboard powering [nas](../servers/nas.md),
+[router](../routers/router.md), the ONT and [pi](../servers/pi.md).
+Runtime at normal load (≈ 140 W) is about 25 minutes.
 
 ## Access
 
-No network interface; status with `upsc ups@10.10.0.10` from any LAN host.
+No network interface; `upsc ups@10.10.0.10` from any LAN host.
 
-## Secrets
+## Configuration
 
-None.
+- USB to `nas`, which runs the NUT server (`upsd`); router and Pi are NUT clients.
+- Shutdown order at 20 % battery: pi, gpu1 (not on the UPS, signalled over
+  the LAN), nas last.
 
-## Known issues
+## Constraints & known issues
 
-- Battery installed 2024-11; plan replacement around 2027-11.
-
-## History
-
-- 2026-08-17 — self-test passed, runtime 26 min at 140 W
-- 2026-02-01 — created
+- Battery from 2024-11; replace around 2027-11.

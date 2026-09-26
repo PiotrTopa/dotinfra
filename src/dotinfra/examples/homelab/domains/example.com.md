@@ -14,7 +14,12 @@ updated: 2026-08-30
 ## Overview
 
 The family's main domain: email for everyone and names for home services.
-Registered at a registrar that also hosts the public DNS zone.
+The registrar also hosts the public DNS zone.
+
+## Access
+
+Registrar web UI; DNS changes by API with `dns_api_token` (vault; scoped to
+DNS edits for this zone, used by the ACME DNS-01 client on `nas`).
 
 ## Configuration
 
@@ -25,21 +30,6 @@ Registered at a registrar that also hosts the public DNS zone.
 | `vpn.example.com` | CNAME | `vps.example.net` |
 | `home.example.com` | — | not public; served only by the router's resolver |
 
-- Renewal: auto-renew each 14 March; card on file.
-- DNSSEC enabled at the registrar.
+- Auto-renews each 14 March; DNSSEC enabled at the registrar.
 
-## Access
-
-Registrar web UI; DNS changes by API with the token below
-(used by the ACME DNS-01 client on `nas`).
-
-## Secrets
-
-- `dns_api_token` — registrar API token, scoped to DNS edits for this zone.
-
-## Known issues
-
-## History
-
-- 2026-08-30 — rotated `dns_api_token`; the old one is revoked
-- 2026-03-14 — added `vpn.example.com`
+## Constraints & known issues

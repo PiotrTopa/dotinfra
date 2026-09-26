@@ -21,29 +21,21 @@ updated: 2026-09-18
 
 ## Overview
 
-14" laptop that goes everywhere. WireGuard is always on, so it keeps the same
-address (`10.99.0.3`) at home and away and stays scrapeable. It shows up on
-the dashboard only while it is awake; gaps in its graphs are expected.
-
-## Configuration
-
-- 12 cores, 32 GB RAM, integrated GPU (no DCGM).
-- WireGuard via NetworkManager connection `wg-homelab`, peer of `hub`.
-- `node_exporter` from the Fedora package, bound to `10.99.0.3:9100`.
-- `dotinfra timer install --interval 15m` keeps `~/.infra` in sync.
+14" laptop that goes everywhere, with an always-on WireGuard address
+(`10.99.0.3`), so it stays scrapeable at home and away. Carries a full CMDB clone.
 
 ## Access
 
-`ssh laptop` from other devices (through `hub`). Only reachable while the
-lid is open.
+`ssh laptop` from other devices (through `hub`), only while the lid is open.
+No vault keys: the disk passphrase is not stored anywhere.
 
-## Secrets
+## Configuration
 
-None stored for this host; the disk passphrase is in Alice's head.
+- Fedora 42; 12 cores, 32 GB RAM, integrated GPU (no DCGM).
+- WireGuard: NetworkManager connection `wg-homelab`, peer of `hub`.
+- `node_exporter` (Fedora package) on `10.99.0.3:9100`.
+- `dotinfra timer install --interval 15m` keeps `~/.infra` in sync.
 
-## Known issues
+## Constraints & known issues
 
-## History
-
-- 2026-09-18 — reinstalled with Fedora 42; restored `~/.infra` with `git clone` from the hub
-- 2026-05-11 — created
+- Shows as down on the dashboard whenever it sleeps; gaps are expected.

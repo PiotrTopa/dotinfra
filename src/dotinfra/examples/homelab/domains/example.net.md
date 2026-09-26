@@ -13,8 +13,12 @@ updated: 2026-09-20
 
 ## Overview
 
-A second, boring domain used only for infrastructure names, so that
-experiments on it never break family email on [example.com](example.com.md).
+A second, boring domain for infrastructure names only, so experiments never
+break family email on [example.com](example.com.md).
+
+## Access
+
+Managed in the VPS provider's console (`hub_provider_console` in the vault).
 
 ## Configuration
 
@@ -25,17 +29,4 @@ experiments on it never break family email on [example.com](example.com.md).
 
 - DNS hosted by the VPS provider; TTL 300 on the hub records.
 
-## Access
-
-Managed in the VPS provider's console (`hub_provider_console` in the vault).
-
-## Secrets
-
-None of its own.
-
-## Known issues
-
-## History
-
-- 2026-09-20 — confirmed records after hub SSH port change (DNS unaffected)
-- 2026-03-12 — registered
+## Constraints & known issues

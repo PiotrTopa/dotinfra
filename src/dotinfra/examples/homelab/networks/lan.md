@@ -13,12 +13,16 @@ updated: 2026-09-05
 
 ## Overview
 
-One flat network for everything at home. Infrastructure uses static leases in
-`10.10.0.0/24`; DHCP clients get `10.10.100.0`–`10.10.199.255`.
+One flat network for everything at home. Infrastructure has static leases in
+`10.10.0.0/24`; DHCP clients get `10.10.100.1`–`10.10.199.254`.
+
+## Access
+
+From outside only through [wireguard](wireguard.md), via the `nas` site gateway.
 
 ## Configuration
 
-| range | use |
+| address | use |
 |---|---|
 | `10.10.0.1` | [router](../routers/router.md) |
 | `10.10.0.10` | [nas](../servers/nas.md) |
@@ -28,19 +32,6 @@ One flat network for everything at home. Infrastructure uses static leases in
 
 - DNS: the router (`10.10.0.1`), search domain `home.example.com`.
 
-## Access
-
-Reachable from outside only through [wireguard](wireguard.md) via the `nas` site gateway.
-
-## Secrets
-
-None.
-
-## Known issues
+## Constraints & known issues
 
 - IoT devices share the LAN; a separate VLAN is planned.
-
-## History
-
-- 2026-09-05 — documented static lease table
-- 2026-03-14 — created
