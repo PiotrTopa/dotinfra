@@ -55,7 +55,8 @@ class DashboardTest(unittest.TestCase):
         self.assertTrue(host["multi"] and host["includeAll"])
         self.assertEqual(host["options"], [])  # nothing hard-coded
         ds = variables["datasource"]
-        self.assertEqual(ds["current"]["value"], grafana.DATASOURCE_UID)
+        self.assertEqual(ds["current"]["value"], "dotinfra-prometheus")
+        self.assertEqual(ds["current"]["text"], "dotinfra Prometheus")
 
     def test_repeated_row_and_layout(self):
         rows = [p for p in self.dash["panels"] if p["type"] == "row"]

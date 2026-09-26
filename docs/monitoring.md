@@ -160,9 +160,20 @@ docker compose up -d                  # --profile node: also monitor this host; 
 ```
 
 Contents: Prometheus (90-day retention, data in the `prometheus_data` volume
-mounted at the TSDB path `/prometheus`), Grafana (datasource provisioned with
-uid `dotinfra-prometheus`, dashboards loaded from `grafana/dashboards/`),
-Pushgateway, and optional node_exporter and NVIDIA DCGM exporter services.
+mounted at the TSDB path `/prometheus`), Grafana (datasource "dotinfra
+Prometheus" provisioned with uid `dotinfra-prometheus`, dashboards loaded from
+`grafana/dashboards/`), Pushgateway, and optional node_exporter and NVIDIA DCGM
+exporter services.
+
+The datasource is deliberately **not** named "Prometheus" and **not** the
+default (`isDefault: false`). Grafana provisions datasources by name: on a
+Grafana that already has a "Prometheus" datasource with another uid,
+provisioning a second one under that name fails ("data source not found") and
+Grafana restarts in a loop. And an adopted Grafana keeps whatever default
+datasource it had; the fleet dashboard does not need the default because its
+`datasource` variable selects uid `dotinfra-prometheus`. Make it the default
+yourself in the UI or in the provisioning file (render keeps your edit) if you
+want new panels to start with it.
 Prometheus config and targets are **directory** mounts, so editors that save
 by renaming files do not leave the container with a stale copy.
 

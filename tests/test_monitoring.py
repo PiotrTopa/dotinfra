@@ -152,6 +152,10 @@ class RenderBundleTest(unittest.TestCase):
             self.assertIn("/etc/dotinfra/targets/*.json", prom)
             ds = (out / "grafana/provisioning/datasources/dotinfra.yml").read_text()
             self.assertIn("uid: dotinfra-prometheus", ds)
+            # never "Prometheus": that name collides with an existing Grafana's datasource
+            self.assertIn("  - name: dotinfra Prometheus\n", ds)
+            self.assertIn("isDefault: false", ds)
+            self.assertNotIn("isDefault: true", ds)
 
     def test_render_keeps_local_edits_unless_forced(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,6 +168,18 @@ class RenderBundleTest(unittest.TestCase):
             self.assertIn(compose, report["kept"])
             monitoring.render_bundle(FLEET, out, force=True)
             self.assertIn("prometheus_data:/prometheus", compose.read_text())
+
+    def test_render_keeps_edited_datasource_provisioning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            monitoring.render_bundle(FLEET, out)
+            ds = out / "grafana/provisioning/datasources/dotinfra.yml"
+            edited = ds.read_text().replace("isDefault: false", "isDefault: true")
+            ds.write_text(edited)
+            report = monitoring.render_bundle(FLEET, out)
+            self.assertEqual(ds.read_text(), edited)
+            self.assertEqual(report["kept"], [ds])
+            self.assertEqual(report["created"], [])
 
 
 def _core_available():

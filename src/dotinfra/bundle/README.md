@@ -10,7 +10,7 @@ bundle/
 ├── prometheus/prometheus.yml           # one file_sd job; no hosts listed here
 ├── targets/*.json                      # GENERATED: one file per metrics job
 └── grafana/
-    ├── provisioning/datasources/       # Prometheus datasource, uid "dotinfra-prometheus"
+    ├── provisioning/datasources/       # "dotinfra Prometheus", uid "dotinfra-prometheus", not default
     ├── provisioning/dashboards/        # loads grafana/dashboards/*.json into folder "Fleet"
     └── dashboards/dotinfra-fleet.json  # GENERATED: fleet dashboard
 ```

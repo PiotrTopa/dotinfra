@@ -1,14 +1,20 @@
 # Provisioned by dotinfra. The fixed uid lets generated dashboards reference
 # this datasource without a lookup.
+#
+# The name is "dotinfra Prometheus", not "Prometheus": Grafana provisions by
+# name, and an existing Grafana that already has a "Prometheus" datasource
+# (with another uid) otherwise fails to start ("data source not found").
+# isDefault is false so an adopted Grafana keeps its own default datasource;
+# the fleet dashboard selects this one by uid and does not need the default.
 apiVersion: 1
 
 datasources:
-  - name: Prometheus
+  - name: dotinfra Prometheus
     uid: dotinfra-prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
-    isDefault: true
+    isDefault: false
     editable: false
     jsonData:
       timeInterval: 15s

@@ -20,6 +20,7 @@ from pathlib import Path
 from . import DotinfraError
 
 DATASOURCE_UID = "dotinfra-prometheus"
+DATASOURCE_NAME = "dotinfra Prometheus"  # as provisioned by the bundle
 DASHBOARD_UID = "dotinfra-fleet"
 EVENT_TAG = "dotinfra"
 
@@ -255,7 +256,7 @@ def build_fleet_dashboard(name: str = "home", datasource_uid: str = DATASOURCE_U
             {
                 "name": "datasource", "label": "Data source", "type": "datasource",
                 "query": "prometheus", "hide": 0, "refresh": 1, "regex": "",
-                "current": {"text": "Prometheus", "value": datasource_uid},
+                "current": {"text": DATASOURCE_NAME, "value": datasource_uid},
             },
             {
                 "name": "host", "label": "Host", "type": "query", "datasource": DS,
