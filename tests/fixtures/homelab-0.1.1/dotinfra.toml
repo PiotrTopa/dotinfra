@@ -1,0 +1,26 @@
+# dotinfra configuration for the fictional "homelab" example CMDB.
+# Try it:  dotinfra --root examples/homelab ls
+
+[cmdb]
+name = "homelab"
+device = ""
+
+[vault]
+backend = "file"
+path = "~/.config/dotinfra/vault.json"
+age_file = "vault.age"
+age_identity = "~/.config/dotinfra/age.key"
+age_recipients = []              # public keys of every device (vault identity / migrate add this one's)
+
+[sync]
+remote = "origin"
+peers = []
+auto_commit = true
+branch = "main"
+
+[monitoring]
+prometheus_url = "http://10.10.0.10:9090"
+grafana_url = "http://10.10.0.10:3000"
+grafana_user = "admin"
+grafana_password_key = "grafana_password"
+bundle_dir = "~/dotinfra-monitoring"
