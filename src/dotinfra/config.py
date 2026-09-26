@@ -1,4 +1,4 @@
-"""Locating the CMDB root and reading `.dotinfra.toml`."""
+"""Locating the CMDB root and reading `.dotinfra.toml` (+ the per-device `.dotinfra.local.toml`)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from . import DotinfraError
 
 DEFAULT_ROOT = Path("~/.infra").expanduser()
 CONFIG_NAME = ".dotinfra.toml"
+LOCAL_CONFIG_NAME = ".dotinfra.local.toml"  # untracked, per-device overrides
 STATE_DIR = ".dotinfra/state"
 
 DEFAULTS: dict[str, dict] = {
@@ -27,9 +28,11 @@ DEFAULTS: dict[str, dict] = {
         "age_recipients": [],
     },
     "sync": {"remote": "origin", "peers": [], "auto_commit": True, "branch": "main"},
+    # grafana_url / prometheus_url have no default: when unset they are resolved from
+    # the `service` component (see monitoring.monitoring_endpoints).
     "monitoring": {
-        "prometheus_url": "http://localhost:9090",
-        "grafana_url": "http://localhost:3000",
+        "service": "monitoring",
+        "role": "client",
         "grafana_user": "admin",
         "grafana_password_key": "grafana_password",
         "bundle_dir": "~/dotinfra-monitoring",
@@ -79,24 +82,46 @@ class Config:
         return self.root / STATE_DIR
 
     @property
+    def local_path(self) -> Path:
+        """This device's untracked override file."""
+        return self.root / LOCAL_CONFIG_NAME
+
+    @property
     def device(self) -> str:
         """This device's name, used in sync commit messages."""
         return self.get("cmdb", "device") or socket.gethostname().split(".")[0]
 
 
-def load_config(root: Path) -> Config:
+def read_toml(path: Path) -> dict:
+    """Parse a TOML file; ``{}`` when it does not exist."""
+    if not path.is_file():
+        return {}
+    return parse_toml(path.read_text(encoding="utf-8"), str(path))
+
+
+def parse_toml(text: str, where: str = CONFIG_NAME) -> dict:
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{where}: invalid TOML: {exc}") from None
+
+
+def deep_merge(base: dict, override: dict) -> dict:
+    """Merge ``override`` into ``base`` in place: tables recursively, other values replaced."""
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = copy.deepcopy(value)
+    return base
+
+
+def load_config(root: Path, *, local: bool = True) -> Config:
+    """Defaults, then ``.dotinfra.toml`` (shared), then ``.dotinfra.local.toml`` (this device)."""
     data = copy.deepcopy(DEFAULTS)
-    path = root / CONFIG_NAME
-    if path.is_file():
-        try:
-            user = tomllib.loads(path.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as exc:
-            raise ConfigError(f"{path}: invalid TOML: {exc}") from None
-        for section, values in user.items():
-            if isinstance(values, dict):
-                data.setdefault(section, {}).update(values)
-            else:
-                data[section] = values
+    deep_merge(data, read_toml(root / CONFIG_NAME))
+    if local:
+        deep_merge(data, read_toml(root / LOCAL_CONFIG_NAME))
     return Config(root=root, data=data)
 
 
@@ -106,15 +131,31 @@ def set_toml_value(path: Path, section: str, key: str, value) -> None:
     Only single-line values are supported (strings, booleans, numbers, flat lists),
     which covers every setting dotinfra writes itself.
     """
-    rendered = f"{key} = {_toml_literal(value)}"
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    path.write_text(set_toml_text(text, section, key, value), encoding="utf-8")
+
+
+def _section_bounds(lines: list[str], section: str) -> tuple[int, int] | None:
     header = f"[{section}]"
-    start = next((i for i, line in enumerate(lines) if line.strip() == header), None)
+    start = next((i for i, line in enumerate(lines) if line.split("#")[0].strip() == header),
+                 None)
     if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(lines)) if _SECTION_RE.match(lines[i])),
+               len(lines))
+    return start, end
+
+
+def set_toml_text(text: str, section: str, key: str, value) -> str:
+    """:func:`set_toml_value` on a string."""
+    rendered = f"{key} = {_toml_literal(value)}"
+    lines = text.splitlines()
+    header = f"[{section}]"
+    bounds = _section_bounds(lines, section)
+    if bounds is None:
         lines += ([""] if lines and lines[-1].strip() else []) + [header, rendered]
     else:
-        end = next((i for i in range(start + 1, len(lines)) if _SECTION_RE.match(lines[i])),
-                   len(lines))
+        start, end = bounds
         key_re = re.compile(rf"\s*{re.escape(key)}\s*=")
         for i in range(start + 1, end):
             if key_re.match(lines[i]):
@@ -123,7 +164,21 @@ def set_toml_value(path: Path, section: str, key: str, value) -> None:
                 break
         else:
             lines.insert(start + 1, rendered)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "\n".join(lines) + "\n"
+
+
+def comment_out_toml_key(text: str, section: str, key: str, note: str = "") -> str:
+    """Turn ``key = ...`` in ``[section]`` into a comment (``# key = ...  # note``)."""
+    lines = text.splitlines()
+    bounds = _section_bounds(lines, section)
+    if bounds is None:
+        return text
+    key_re = re.compile(rf"\s*{re.escape(key)}\s*=")
+    for i in range(bounds[0] + 1, bounds[1]):
+        if key_re.match(lines[i]):
+            code = lines[i][: len(lines[i]) - len(_trailing_comment(lines[i]))].rstrip()
+            lines[i] = f"# {code}" + (f"  # {note}" if note else "")
+    return "\n".join(lines) + "\n"
 
 
 def _toml_literal(value) -> str:
