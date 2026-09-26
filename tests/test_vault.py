@@ -125,6 +125,15 @@ class VaultCliTest(VaultTestCase):
         self.assertEqual(code, 1)
         self.assertIn("values must be strings", err)
 
+    def test_loose_permissions_warn(self):
+        self.cli("set", "k", stdin="v\n")
+        self.assertEqual(self.cli("list")[2], "")
+        self.vault_path.chmod(0o644)
+        code, out, err = self.cli("list")
+        self.assertEqual((code, out), (0, "k\n"))
+        self.assertIn("warning", err)
+        self.assertIn("chmod 600", err)
+
     def test_secret_never_in_error_output(self):
         self.cli("set", "k", stdin="supersecret\n")
         self.assertNotIn("supersecret", "".join(self.cli("list")[1:]))

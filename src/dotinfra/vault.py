@@ -98,6 +98,9 @@ class FileVault(Vault):
         if not self.path.exists():
             return {}
         try:
+            if self.path.stat().st_mode & 0o077:
+                print(f"warning: {self.path} is readable by other users; run "
+                      f"`chmod 600 {self.path}`", file=sys.stderr)
             data = json.loads(self.path.read_text(encoding="utf-8") or "{}")
         except (OSError, json.JSONDecodeError) as exc:
             raise VaultError(f"cannot read vault {self.path}: {exc}") from None
