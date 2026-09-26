@@ -126,6 +126,7 @@ def plan_migration(root: Path) -> Plan:
     if text != original:
         plan.files[CONFIG_NAME] = (original, text)
 
+    shared_config = Config(root=root, data=deep_merge(copy.deepcopy(DEFAULTS), shared))
     merged = deep_merge(copy.deepcopy(DEFAULTS), shared)
     deep_merge(merged, read_toml(root / LOCAL_CONFIG_NAME))
     config = Config(root=root, data=merged)
@@ -139,7 +140,8 @@ def plan_migration(root: Path) -> Plan:
                 plan.lines.append(f"{directory.relative_to(root).as_posix()}/: refresh "
                                   "project-scope skills")
 
-    for target, content in managed_contents(root, config).items():
+    # managed files are committed: render them from the shared config only
+    for target, content in managed_contents(root, shared_config).items():
         path = root / target
         old = path.read_text(encoding="utf-8") if path.exists() else None
         new, action = refresh(old, content, style_for(target),

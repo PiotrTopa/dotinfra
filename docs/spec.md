@@ -508,9 +508,13 @@ reported.
 **README "Start here — new machine"**: install command, `git clone <[sync] remote_url>
 ~/.infra` (a placeholder with instructions while unknown; credentials in http(s)
 URLs are never written), `dotinfra doctor`, `dotinfra skills install` (and whether
-the repo carries project-scope skills), vault access for the file and age backends,
-`dotinfra timer install`, the monitoring host (from the service component), the
-minimum dotinfra version, and `.dotinfra.local.toml`.
+the repo carries project-scope skills), vault access for the configured backend
+with its configured paths (`[vault] path` for `file`; `age_file` and `age_identity`
+for `age`), `dotinfra timer install`, the monitoring host (from the service
+component), the minimum dotinfra version, and `.dotinfra.local.toml`. Managed
+blocks are rendered from the shared `.dotinfra.toml` only (never
+`.dotinfra.local.toml`: they are committed), so `migrate` refreshes the vault step
+whenever `[vault]` changes there.
 
 **`dotinfra migrate`**: (1) schema migrations `MIGRATIONS[n]: (toml_text, notes) ->
 toml_text` from the CMDB's `[cmdb] schema` (absent = 0) up to the package's

@@ -79,6 +79,38 @@ def _monitoring_note(root: Path, config: Config) -> str:
             f"{host} itself run `dotinfra monitoring setup-server` once.")
 
 
+def _shown_path(value) -> str:
+    """A configured path as the README shows it: ``~`` kept, repo-relative paths marked."""
+    text = str(value or "")
+    return f"`{text}`" if text.startswith(("~", "/")) else f"`{text}` in this repository"
+
+
+def _vault_step(config: Config) -> str:
+    """README step 5, for the vault backend and paths in the shared ``.dotinfra.toml``."""
+    backend = str(config.get("vault", "backend", "file"))
+
+    head = f"5. **Vault access** — this CMDB uses the **{backend}** vault backend"
+    if backend == "age":
+        identity = _shown_path(config.get("vault", "age_identity", ""))
+        age_file = _shown_path(config.get("vault", "age_file", "vault.age"))
+        body = (f"{head}: the secrets are encrypted into {age_file} and sync with the "
+                f"CMDB. Each device decrypts with its own identity, {identity}. Run "
+                "`dotinfra vault identity` and `dotinfra sync` here, then on a device that "
+                "can already decrypt: `dotinfra sync && dotinfra vault rekey && dotinfra "
+                "sync`; finally `dotinfra sync` here again.")
+    elif backend == "file":
+        path = _shown_path(config.get("vault", "path", ""))
+        body = (f"{head}: the secrets live in {path} on each device (mode 0600, "
+                "not synced). Copy that file from an existing "
+                "device over a trusted channel, or `dotinfra vault import FILE`. To share "
+                "them through this repository instead: `dotinfra vault migrate --to age`.")
+    else:
+        body = f"{head}; see `[vault]` in `.dotinfra.toml`."
+    body += (" A device can override the vault paths in `.dotinfra.local.toml`; "
+             "`dotinfra migrate` refreshes this step when `[vault]` changes.")
+    return textwrap.fill(body, width=79, subsequent_indent="   ", break_on_hyphens=False)
+
+
 def template_values(root: Path, config: Config) -> dict[str, str]:
     from .skills import TARGETS, project_targets
 
@@ -97,6 +129,7 @@ def template_values(root: Path, config: Config) -> dict[str, str]:
                 "URL here.", width=79, initial_indent="   ", subsequent_indent="   ") + "\n"),
         "age_note": ", plus `age` (the vault is age-encrypted)" if backend == "age" else "",
         "vault_backend": backend,
+        "vault": _vault_step(config),
         "project_skills": "" if not dirs else "\n" + textwrap.fill(
             "This repository already carries the skills for agents started inside it ("
             + ", ".join(f"`{d}`" for d in dirs) + "), so step 4 only adds them for work "
@@ -107,7 +140,12 @@ def template_values(root: Path, config: Config) -> dict[str, str]:
 
 
 def managed_contents(root: Path, config: Config) -> dict[str, str]:
-    """The current content of every managed block, rendered for this CMDB."""
+    """The current content of every managed block, rendered for this CMDB.
+
+    ``config`` should be the shared configuration (``load_config(root, local=False)``):
+    the managed files are committed, so one device's ``.dotinfra.local.toml`` must not
+    leak into them.
+    """
     values = template_values(root, config)
     return {target: fill((TEMPLATES / template).read_text(encoding="utf-8"), values)
             for target, template in MANAGED_FILES.items()}
@@ -151,7 +189,7 @@ def init_cmdb(root: Path, name: str, *, use_git: bool = True, example: str | Non
 
         install_skills(skills, scope=PROJECT, root=root)
         report.append(f"skills  project scope for {', '.join(skills)}")
-    config = load_config(root)
+    config = load_config(root, local=False)
     for target, content in managed_contents(root, config).items():
         path = root / target
         if path.exists():

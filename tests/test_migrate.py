@@ -239,6 +239,54 @@ class MigrateLegacyTest(MigrateTestCase):
         self.assertIn("merge is in progress", self.migrate(root, expected=1))
 
 
+class ReadmeVaultStepTest(MigrateTestCase):
+    """README step 5 names the configured vault backend and paths (shared config only)."""
+
+    @staticmethod
+    def vault_step(root: Path) -> str:
+        readme = (root / "README.md").read_text()
+        start = readme.index("5. **Vault access**")
+        return " ".join(readme[start:readme.index("6. **", start)].split())
+
+    def test_init_renders_default_file_vault(self):
+        root = self.make_cmdb("fresh")
+        step = self.vault_step(root)
+        self.assertIn("**file** vault backend", step)
+        self.assertIn("`~/.config/dotinfra/vault.json`", step)
+        self.assertNotIn("vault.age", step)
+
+    def test_migrate_refreshes_configured_path_and_backend(self):
+        root = self.make_cmdb("custom")
+        config = root / ".dotinfra.toml"
+        config.write_text(config.read_text().replace(
+            'path = "~/.config/dotinfra/vault.json"', 'path = "~/keys/lab-vault.json"'))
+        # a device-only override must not end up in the shared README
+        (root / ".dotinfra.local.toml").write_text(
+            '[vault]\npath = "/media/usb7/vault.json"\n')
+        git(root, "add", ".dotinfra.toml")
+        git(root, "commit", "-q", "-m", "custom vault path")
+        out = self.migrate(root)
+        self.assertIn("README.md: managed block refreshed", out)
+        step = self.vault_step(root)
+        self.assertIn("`~/keys/lab-vault.json`", step)
+        self.assertNotIn("~/.config/dotinfra/vault.json", step)
+        self.assertNotIn("usb7", (root / "README.md").read_text())
+        self.assertIn(f"migrate: dotinfra {__version__}", self.commits(root)[0])
+
+        text = config.read_text().replace('backend = "file"', 'backend = "age"').replace(
+            'age_identity = "~/.config/dotinfra/age.key"', 'age_identity = "~/keys/lab-age.txt"')
+        config.write_text(text)
+        git(root, "commit", "-q", "-am", "age backend")
+        self.migrate(root)
+        step = self.vault_step(root)
+        self.assertIn("**age** vault backend", step)
+        self.assertIn("`vault.age` in this repository", step)
+        self.assertIn("`~/keys/lab-age.txt`", step)
+        self.assertIn("dotinfra vault rekey", step)
+        self.assertNotIn("lab-vault.json", step)
+        self.assertIn("up to date", self.migrate(root))  # idempotent
+
+
 class MigrateSkillsTest(MigrateTestCase):
     def test_refreshes_project_and_recorded_user_skills(self):
         root = self.make_cmdb("cur")
