@@ -39,7 +39,7 @@
 | id | status | address | role | tags |
 |---|---|---|---|---|
 | [home-assistant](services/home-assistant.md) | active | 10.10.0.40 | Home Assistant with Zigbee devices | iot, docker |
-| [monitoring](services/monitoring.md) | active | 10.10.0.10 | Metrics, fleet dashboard and the infra event log | observability, docker |
+| [monitoring](services/monitoring.md) | active |  | Metrics, fleet dashboard and the infra event log | observability, docker |
 
 ## Devices
 

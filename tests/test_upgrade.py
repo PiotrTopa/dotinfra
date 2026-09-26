@@ -90,7 +90,7 @@ class InstallMethodTest(unittest.TestCase):
         prefix = "/home/alice/.local/share/pipx/venvs/dotinfra"
         with mock.patch("importlib.metadata.distribution", return_value=dist), \
                 mock.patch("sys.prefix", prefix):
-            self.assertEqual(upgrade.install_method(), ("pipx", prefix))
+            self.assertEqual(upgrade.install_method(), ("pipx", str(Path(prefix).resolve())))
 
     def test_detects_editable(self):
         dist = mock.Mock()
