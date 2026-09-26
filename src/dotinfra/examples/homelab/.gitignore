@@ -1,4 +1,7 @@
-# dotinfra: local state, private notes and plaintext vaults never leave this device
+# dotinfra:managed:start v=0.2.0
+# local state, per-device config, private notes and plaintext vaults never leave this device
 .dotinfra/state/
+.dotinfra.local.toml
 *.local.md
 vault.json
+# dotinfra:managed:end

@@ -1,3 +1,4 @@
+<!-- dotinfra:managed:start v=0.2.0 -->
 # Infrastructure CMDB — rules for AI agents
 
 This folder is the source of truth for the infrastructure of **homelab**: one
@@ -66,3 +67,17 @@ finish the task**, not "later":
 - Do not delete component files; set `status: retired` and add a History line.
 - Files ending in `.local.md` are private to this device and never synced.
 - `INDEX.md` is generated — edit component files, then run `dotinfra index`.
+
+## 7. Tooling
+
+- If a `dotinfra` command exits with code 3, this device's dotinfra is older
+  than the CMDB's `[cmdb] min_version`: run `dotinfra upgrade` (it also runs
+  `dotinfra migrate`), never work around the check.
+- Text between `dotinfra:managed` markers (in this file, README.md, CLAUDE.md,
+  .gitignore, .gitattributes) is rewritten by `dotinfra migrate`. Put local
+  additions outside the markers.
+- Machine-specific settings go in `.dotinfra.local.toml` (untracked), never in
+  `.dotinfra.toml`, which every device shares.
+- Monitoring runs on one machine: `dotinfra monitoring where` says which one and
+  whether this device is it. Deploy or change the stack only there.
+<!-- dotinfra:managed:end -->

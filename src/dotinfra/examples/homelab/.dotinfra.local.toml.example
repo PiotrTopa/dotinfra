@@ -1,0 +1,15 @@
+# Example .dotinfra.local.toml for the monitoring host (nas) of the "homelab" example.
+# Copy it to .dotinfra.local.toml on that machine: the file is ignored by git and
+# overrides .dotinfra.toml on this device only.
+
+[cmdb]
+device = "nas"                   # name in sync commit messages (default: hostname)
+
+[monitoring]
+role = "server"                  # this device runs the stack; `dotinfra sync` refreshes targets
+# bundle_dir = "/srv/dotinfra-monitoring"   # only where it differs from the shared default
+
+# On a device reaching Grafana through the nas WireGuard address instead, the local file might hold:
+# [monitoring]
+# grafana_url = "http://10.99.0.2:3000"
+# prometheus_url = "http://10.99.0.2:9090"

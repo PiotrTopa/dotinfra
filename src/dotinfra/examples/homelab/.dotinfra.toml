@@ -1,9 +1,12 @@
-# dotinfra configuration for the fictional "homelab" example CMDB.
+# dotinfra configuration for the fictional "homelab" example CMDB, shared by every device.
 # Try it:  dotinfra --root examples/homelab ls
+# Machine-specific settings live in .dotinfra.local.toml (untracked); see
+# .dotinfra.local.toml.example for what the monitoring host (nas) keeps there.
 
 [cmdb]
 name = "homelab"
-device = ""
+schema = 1                       # CMDB layout version; `dotinfra migrate` updates it
+min_version = "0.2.0"            # oldest dotinfra allowed to write here (set by migrate)
 
 [vault]
 backend = "file"
@@ -14,13 +17,13 @@ age_recipients = []              # public keys of every device (vault identity /
 
 [sync]
 remote = "origin"
+remote_url = "git@git.example.com:alice/homelab-infra.git"   # clone URL shown in README.md
 peers = []
 auto_commit = true
 branch = "main"
 
 [monitoring]
-prometheus_url = "http://10.10.0.10:9090"
-grafana_url = "http://10.10.0.10:3000"
+service = "monitoring"           # services/monitoring.md: runs_on nas, url + prometheus_url
 grafana_user = "admin"
 grafana_password_key = "grafana_password"
 bundle_dir = "~/dotinfra-monitoring"
