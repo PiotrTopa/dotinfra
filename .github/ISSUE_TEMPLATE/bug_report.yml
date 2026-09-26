@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste real secrets, hostnames or addresses** —
+        use fictional ones (example.com, 10.10.0.0/16, 192.0.2.0/24).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Command you ran, what you expected, what you got (full output).
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A fictional component file or steps from `dotinfra init` that reproduce it.
+      render: markdown
+  - type: textarea
+    id: doctor
+    attributes:
+      label: dotinfra doctor output
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, Python version, git version
+      placeholder: Debian 12, Python 3.11.2, git 2.39
+  - type: input
+    id: agent
+    attributes:
+      label: AI agent involved (if any)
+      placeholder: Claude Code / Codex / Cursor / none

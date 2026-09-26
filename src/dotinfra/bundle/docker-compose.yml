@@ -1,0 +1,96 @@
+# dotinfra monitoring bundle — Prometheus + Grafana + Pushgateway.
+#
+#   cp .env.example .env            # then set GRAFANA_ADMIN_PASSWORD
+#   docker compose up -d            # core stack
+#   docker compose --profile node up -d        # + node_exporter for this host
+#   docker compose --profile node --profile gpu up -d   # + NVIDIA DCGM exporter
+#
+# Targets come from ./targets/*.json (written by `dotinfra monitoring targets`).
+# Prometheus re-reads them every minute: no restart needed when hosts change.
+# Image tags are pinned for reproducibility; override them in .env.
+
+name: dotinfra-monitoring
+
+services:
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.0}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      # The named volume below is mounted exactly here, so TSDB history
+      # survives `docker compose down` / image upgrades.
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      # Directory mounts (not single files): editors that save via rename
+      # would otherwise leave the container looking at a stale inode.
+      - ./prometheus:/etc/prometheus:ro
+      - ./targets:/etc/dotinfra/targets:ro
+    restart: unless-stopped
+
+  pushgateway:
+    image: ${PUSHGATEWAY_IMAGE:-prom/pushgateway:v1.11.1}
+    ports:
+      - "${PUSHGATEWAY_PORT:-9091}:9091"
+    restart: unless-stopped
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      # Only applied when Grafana initialises its database (first start).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/dotinfra/dashboards/dotinfra-fleet.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/dotinfra/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Optional: metrics of the machine running this stack.
+  # Enable with `--profile node`, then give that host `metrics: [node:9100]`.
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.9.1}
+    profiles: ["node"]
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/host/var/lib/node_exporter/textfile_collector
+    network_mode: host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  # Optional: NVIDIA GPU metrics (needs the NVIDIA driver and
+  # nvidia-container-toolkit on the host). Enable with `--profile gpu`,
+  # then give that host `metrics: [node:9100, dcgm:9400]`.
+  # Check https://catalog.ngc.nvidia.com/orgs/nvidia/teams/k8s/containers/dcgm-exporter
+  # for a tag matching your driver.
+  dcgm-exporter:
+    image: ${DCGM_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:4.2.3-4.1.1-ubuntu22.04}
+    profiles: ["gpu"]
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "9400:9400"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

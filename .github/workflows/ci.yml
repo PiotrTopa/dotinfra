@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: python -m pip install -e .
+
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.com"
+          git config --global init.defaultBranch main
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Lint the example CMDB
+        run: dotinfra --root src/dotinfra/examples/homelab lint
+
+      - name: Example INDEX.md is up to date
+        run: dotinfra --root src/dotinfra/examples/homelab index --check
+
+      - name: Monitoring bundle renders
+        run: |
+          dotinfra --root src/dotinfra/examples/homelab monitoring render --output "$RUNNER_TEMP/bundle"
+          python -m json.tool "$RUNNER_TEMP/bundle/grafana/dashboards/dotinfra-fleet.json" > /dev/null
+
+      - name: Validate compose file
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP/bundle"
+          GRAFANA_ADMIN_PASSWORD=ci docker compose config --quiet
+          GRAFANA_ADMIN_PASSWORD=ci docker compose --profile node --profile gpu config --quiet
+
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build and smoke-test the wheel (package data included)
+        run: |
+          python -m pip install build
+          python -m build --wheel
+          python -m venv /tmp/w && /tmp/w/bin/pip install dist/*.whl
+          cd /tmp && /tmp/w/bin/dotinfra --help > /dev/null
+          /tmp/w/bin/dotinfra --root "$GITHUB_WORKSPACE/src/dotinfra/examples/homelab" monitoring render --output /tmp/bundle-wheel
+          test -f /tmp/bundle-wheel/docker-compose.yml
+          test -f /tmp/bundle-wheel/.env.example

@@ -1,0 +1,33 @@
+# Prometheus configuration for the dotinfra monitoring bundle.
+#
+# Hosts are NOT listed here. `dotinfra monitoring targets` writes one
+# file_sd JSON file per metrics job (node.json, dcgm.json, ...) into
+# ../targets/, derived from the `metrics:` field of your CMDB components.
+# Every target group carries the labels:
+#   job      the job name from `metrics: [job:port]`
+#   host     the component id
+#   instance <host>:<port>
+#   role     "fleet" (component tagged `fleet`) or "infra"
+#   kind     server | router | device | ...
+# Prometheus re-reads the files every minute, so no restart is needed.
+# Apply edits to THIS file with:  curl -X POST http://localhost:9090/-/reload
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: dotinfra
+    file_sd_configs:
+      - files:
+          - /etc/dotinfra/targets/*.json
+        refresh_interval: 1m
+
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -1,0 +1,14 @@
+# Provisioned by dotinfra. The fixed uid lets generated dashboards reference
+# this datasource without a lookup.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: dotinfra-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

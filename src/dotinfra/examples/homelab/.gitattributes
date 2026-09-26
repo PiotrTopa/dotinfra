@@ -1,0 +1,5 @@
+* text=auto eol=lf
+# Section-aware merges of component files (dotinfra merge-driver)
+*.md merge=dotinfra
+# The age vault is an opaque encrypted blob
+vault.age binary

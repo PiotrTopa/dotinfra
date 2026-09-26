@@ -1,0 +1,25 @@
+# dotinfra configuration — see https://github.com/PiotrTopa/dotinfra/blob/main/docs/spec.md
+
+[cmdb]
+name = "{{name}}"                # shown in INDEX.md and dashboards
+device = ""                      # this device's name in sync commits; "" = hostname
+
+[vault]
+backend = "file"                 # "file" | "age"
+path = "~/.config/dotinfra/vault.json"   # file backend: plaintext JSON, mode 0600, outside the CMDB
+age_file = "vault.age"           # age backend: encrypted file inside the CMDB (syncs with it)
+age_identity = "~/.config/dotinfra/age.key"
+age_recipients = []              # public keys of your other devices
+
+[sync]
+remote = "origin"                # hub remote; "" = peers only
+peers = []                       # other devices' remotes (dotinfra peer add NAME URL)
+auto_commit = true
+branch = "main"
+
+[monitoring]
+prometheus_url = "http://localhost:9090"
+grafana_url = "http://localhost:3000"
+grafana_user = "admin"
+grafana_password_key = "grafana_password"   # vault key, not the password
+bundle_dir = "~/dotinfra-monitoring"

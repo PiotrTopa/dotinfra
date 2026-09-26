@@ -1,0 +1,17 @@
+# Provisioned by dotinfra. Loads every *.json in /etc/dotinfra/dashboards
+# (the bundle's grafana/dashboards/ directory) into the "Fleet" folder and
+# re-reads it every 30 s, so `dotinfra monitoring render` updates are live.
+apiVersion: 1
+
+providers:
+  - name: dotinfra
+    orgId: 1
+    folder: Fleet
+    folderUid: dotinfra
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/dotinfra/dashboards
+      foldersFromFilesStructure: false

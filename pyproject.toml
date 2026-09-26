@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dotinfra"
+version = "0.1.0"
+description = "A self-maintaining Markdown infrastructure CMDB shared by humans and AI agents: vault, git sync with section-aware merges, SSH config and monitoring generators."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Piotr Topa" }]
+keywords = ["cmdb", "infrastructure", "homelab", "markdown", "ai-agents", "ssh", "git"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = []
+
+[project.scripts]
+dotinfra = "dotinfra.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dotinfra = [
+    "templates/**/*",
+    "skills/**/*",
+    "examples/**/*",
+    "examples/**/.*",
+    "bundle/**/*",
+    "bundle/**/.*",
+]
