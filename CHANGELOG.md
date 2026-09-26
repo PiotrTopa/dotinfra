@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-09-26
+
+### Fixed
+
+- Fleet dashboard: the CPU temperature panels went blank for any time range in which a
+  target's label set changed (e.g. right after adopting dotinfra on a running
+  Prometheus): old and new `node_hwmon_chip_names` series overlapped and Prometheus
+  rejected the join with "duplicate series". The chip-name side is now collapsed per
+  `(host, chip)`. Re-run `dotinfra monitoring render` to regenerate the dashboard.
+- `dotinfra upgrade` now installs the latest release tag (`pipx install --force …@vX.Y.Z`
+  / `pip install -U …@vX.Y.Z`). Before, `pipx upgrade` kept an install pinned to an
+  older tag, and pip installs followed the default branch instead of releases. It also
+  says "up to date" instead of reinstalling when nothing is newer; offline, it falls
+  back to the previous behaviour.
+
 ## [0.2.2] — 2026-09-26
 
 Fixes found while adopting dotinfra on an already-running Prometheus/Grafana stack.
@@ -171,7 +186,8 @@ First public release.
   Grafana annotations (`event add|list|rm`).
 - Fictional example CMDB `examples/homelab`.
 
-[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.1...v0.2.0

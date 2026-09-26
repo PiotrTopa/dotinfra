@@ -15,6 +15,7 @@ The upgrade command depends on how dotinfra was installed:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import site
 import subprocess
@@ -96,19 +97,33 @@ def install_method() -> tuple[str, str]:
     return "system", str(prefix)
 
 
-def upgrade_command(kind: str, detail: str, *, pre: bool = False) -> list[str]:
-    """The command that upgrades an installation of ``kind``; DotinfraError if we should not."""
+TAG_RE = re.compile(r"^v?\d+\.\d+\.\d+(?:[-.+]?[0-9A-Za-z.]+)?$")
+
+
+def upgrade_command(kind: str, detail: str, *, pre: bool = False,
+                    tag: str | None = None) -> list[str]:
+    """The command that upgrades an installation of ``kind``; DotinfraError if we should not.
+
+    With ``tag`` (the latest release), the install is replaced by exactly that release:
+    ``pipx upgrade`` alone would keep an install pinned to an older tag, and a bare git URL
+    would install whatever is on the default branch.
+    """
+    if tag is not None and not TAG_RE.match(tag):
+        raise DotinfraError(f"unexpected release tag {tag!r}")
+    url = f"{GIT_URL}@{tag}" if tag else GIT_URL
     pre_args = ["--pre"] if pre else []
     if kind == "pipx":
         pipx = shutil.which("pipx")
         if not pipx:
             raise DotinfraError(f"dotinfra is installed with pipx ({detail}) but `pipx` is not "
                                 "on PATH; run `pipx upgrade dotinfra` yourself")
+        if tag:
+            return [pipx, "install", "--force", url]
         return [pipx, "upgrade", *(["--pip-args=--pre"] if pre else []), "dotinfra"]
     if kind == "user":
-        return [sys.executable, "-m", "pip", "install", "--user", "-U", *pre_args, GIT_URL]
+        return [sys.executable, "-m", "pip", "install", "--user", "-U", *pre_args, url]
     if kind == "venv":
-        return [sys.executable, "-m", "pip", "install", "-U", *pre_args, GIT_URL]
+        return [sys.executable, "-m", "pip", "install", "-U", *pre_args, url]
     if kind in ("editable", "source"):
         raise DotinfraError(f"dotinfra runs from a source checkout ({detail}); update it with "
                             "`git pull` there (and `pip install -e .` if it is an editable "
@@ -138,7 +153,14 @@ def cmd_upgrade(args) -> int:
             print(f"dotinfra {current} is up to date (latest release {latest})")
         return 0
     kind, detail = install_method()
-    command = upgrade_command(kind, detail, pre=args.pre)
+    latest = latest_release(args.pre)
+    if latest is not None and not is_newer(latest, current):
+        print(f"dotinfra {current} is up to date (latest release {latest})")
+        return 0
+    if latest is None:
+        print("could not reach GitHub to find the latest release; upgrading from the default "
+              "branch instead", file=sys.stderr)
+    command = upgrade_command(kind, detail, pre=args.pre, tag=latest)
     print(f"dotinfra {current} ({kind} install); running: {' '.join(command)}", flush=True)
     result = subprocess.run(command)
     if result.returncode != 0:

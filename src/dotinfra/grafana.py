@@ -56,8 +56,11 @@ QUERIES: dict[str, tuple[str, str, tuple | None, str]] = {
         f' / node_filesystem_size_bytes{{mountpoint="/",fstype!~"tmpfs|ramfs",{H}}})',
         "percentunit", (0.8, 0.9), "—"),
     "CPU temp": (
+        # The chip-name side is collapsed to one series per (host, chip): when a target's
+        # label set changes, old and new series overlap for the lookback window and a plain
+        # join fails with "duplicate series", blanking the panel for any range spanning it.
         f'max by(host)(node_hwmon_temp_celsius{{{H}}} * on(host, chip) group_left(chip_name)'
-        f' node_hwmon_chip_names{{chip_name=~"coretemp|k10temp|zenpower|cpu_thermal|soc_thermal|cpu-thermal",{H}}})'
+        f' max by(host, chip, chip_name)(node_hwmon_chip_names{{chip_name=~"coretemp|k10temp|zenpower|cpu_thermal|soc_thermal|cpu-thermal",{H}}}))'
         f' or max by(host)(node_thermal_zone_temp{{{H}}})'
         f' or max by(host)(node_cpu_temperature_celsius{{{H}}})',
         "celsius", (75, 90), "n/a"),

@@ -17,15 +17,20 @@ Its own edits stay committed locally until it can sync again.
 
 ## `dotinfra upgrade`
 
-It works out how dotinfra was installed and runs the matching command:
+It looks up the latest release on GitHub, works out how dotinfra was installed and
+replaces the install with exactly that release (`vX.Y.Z` below). If you already run the
+latest release it says so and does nothing.
 
 | installed with | upgrade command |
 |---|---|
-| `pipx install git+https://github.com/PiotrTopa/dotinfra` | `pipx upgrade dotinfra` |
-| `pip install --user git+...` | `python -m pip install --user -U git+https://github.com/PiotrTopa/dotinfra` |
-| pip inside a virtualenv | `python -m pip install -U git+...` |
+| pipx (pinned to a tag or not) | `pipx install --force git+https://github.com/PiotrTopa/dotinfra@vX.Y.Z` |
+| `pip install --user git+...` | `python -m pip install --user -U git+https://github.com/PiotrTopa/dotinfra@vX.Y.Z` |
+| pip inside a virtualenv | `python -m pip install -U git+...@vX.Y.Z` |
 | a source checkout or `pip install -e` | refused: `git pull` in the checkout instead |
 | system-wide | refused: use the tool that installed it, or switch to pipx |
+
+Offline (GitHub unreachable) it falls back to `pipx upgrade dotinfra` / the bare git URL.
+Plain `pipx upgrade dotinfra` keeps a tag pin such as `@v0.2.1`, so prefer `dotinfra upgrade`.
 
 `--pre` also allows pre-releases. When run inside a CMDB (the current folder,
 `--root` or `~/.infra`), it then runs `dotinfra migrate --yes` with the new

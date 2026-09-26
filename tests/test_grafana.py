@@ -34,6 +34,12 @@ class FakeUrlopen:
         return FakeResponse(json.dumps(reply).encode())
 
 
+def _walk(panels):
+    for p in panels:
+        yield p
+        yield from _walk(p.get("panels", []))
+
+
 class DashboardTest(unittest.TestCase):
     def setUp(self):
         self.dash = grafana.build_fleet_dashboard(name="lab")
@@ -41,6 +47,15 @@ class DashboardTest(unittest.TestCase):
     def test_roundtrips_as_json(self):
         text = grafana.dashboard_json(self.dash)
         self.assertEqual(json.loads(text), self.dash)
+
+    def test_cpu_temp_join_tolerates_duplicate_chip_name_series(self):
+        # a label-set change leaves old and new node_hwmon_chip_names series overlapping;
+        # the right-hand side must be collapsed per (host, chip) or Prometheus rejects the query
+        exprs = [t["expr"] for p in _walk(self.dash["panels"]) for t in p.get("targets", [])
+                 if "node_hwmon_chip_names" in t.get("expr", "")]
+        self.assertTrue(exprs)
+        for e in exprs:
+            self.assertIn("group_left(chip_name) max by(host, chip, chip_name)(node_hwmon_chip_names", e)
 
     def test_identity(self):
         self.assertEqual(self.dash["uid"], "dotinfra-fleet")

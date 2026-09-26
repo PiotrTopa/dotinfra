@@ -78,6 +78,17 @@ class InstallMethodTest(unittest.TestCase):
         with mock.patch("shutil.which", return_value=None), self.assertRaises(DotinfraError):
             upgrade.upgrade_command("pipx", "x")
 
+    def test_commands_with_a_release_tag(self):
+        with mock.patch("shutil.which", return_value="/usr/bin/pipx"):
+            self.assertEqual(upgrade.upgrade_command("pipx", "x", tag="v1.2.3"),
+                             ["/usr/bin/pipx", "install", "--force",
+                              "git+https://github.com/PiotrTopa/dotinfra@v1.2.3"])
+        self.assertEqual(upgrade.upgrade_command("user", "x", tag="v1.2.3")[-1],
+                         "git+https://github.com/PiotrTopa/dotinfra@v1.2.3")
+        for bad in ("main; rm -rf /", "--editable", "v1.2"):
+            with self.subTest(tag=bad), self.assertRaises(DotinfraError):
+                upgrade.upgrade_command("user", "x", tag=bad)
+
     def test_detects_the_dev_checkout(self):
         # the test suite runs from src/ via PYTHONPATH or an editable install
         self.assertIn(upgrade.install_method()[0], ("editable", "source"))
@@ -101,7 +112,38 @@ class InstallMethodTest(unittest.TestCase):
 
 
 class UpgradeCommandTest(IsolatedTestCase):
+    def setUp(self):
+        super().setUp()
+        # offline by default: `upgrade` looks up the latest release first
+        self.real_latest_release = upgrade.latest_release
+        patcher = mock.patch.object(upgrade, "latest_release", return_value=None)
+        self.latest = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_upgrade_installs_the_latest_release_tag(self):
+        self.latest.return_value = "v9.0.0"
+        calls = []
+        with mock.patch.object(upgrade, "install_method", return_value=("pipx", "/p")), \
+                mock.patch("shutil.which", return_value="/usr/bin/pipx"), \
+                mock.patch("subprocess.run",
+                           lambda cmd, **kw: calls.append(cmd) or
+                           subprocess.CompletedProcess(cmd, 0)):
+            code, _, err = run_cli("--root", self.tmp / "nothing", "upgrade")
+        self.assertEqual(code, 0, err)
+        # a tag-pinned pipx install is replaced, not `pipx upgrade`d (which keeps the pin)
+        self.assertEqual(calls, [["/usr/bin/pipx", "install", "--force",
+                                  f"{upgrade.GIT_URL}@v9.0.0"]])
+
+    def test_upgrade_when_already_latest_does_nothing(self):
+        self.latest.return_value = "v0.0.1"
+        with mock.patch("subprocess.run") as run:
+            code, out, _ = run_cli("upgrade")
+        self.assertEqual(code, 0)
+        run.assert_not_called()
+        self.assertIn("is up to date", out)
+
     def test_check_reports_newer(self):
+        self.latest.side_effect = self.real_latest_release  # exercise the HTTP lookup
         urlopen, _ = serve({"/releases": [{"tag_name": "v9.0.0"}]})
         with mock.patch("urllib.request.urlopen", urlopen):
             code, out, _ = run_cli("upgrade", "--check")
@@ -109,6 +151,7 @@ class UpgradeCommandTest(IsolatedTestCase):
         self.assertIn("dotinfra 9.0.0 is available", out)
 
     def test_check_offline_is_not_an_error(self):
+        self.latest.side_effect = self.real_latest_release  # exercise the HTTP lookup
         urlopen, _ = serve({})
         with mock.patch("urllib.request.urlopen", urlopen):
             code, out, _ = run_cli("upgrade", "--check")
@@ -157,6 +200,7 @@ class UpgradeCommandTest(IsolatedTestCase):
         self.assertIn("git pull", err)
 
     def test_doctor_check_updates(self):
+        self.latest.side_effect = self.real_latest_release  # exercise the HTTP lookup
         root = self.make_cmdb()
         urlopen, _ = serve({"/releases": [{"tag_name": "v9.0.0"}]})
         with mock.patch("urllib.request.urlopen", urlopen):
