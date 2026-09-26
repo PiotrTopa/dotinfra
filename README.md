@@ -1,5 +1,11 @@
 # dotinfra
 
+[![CI](https://github.com/PiotrTopa/dotinfra/actions/workflows/ci.yml/badge.svg)](https://github.com/PiotrTopa/dotinfra/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/PiotrTopa/dotinfra)](https://github.com/PiotrTopa/dotinfra/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
+
 **A Markdown CMDB for your servers that AI agents read before they touch anything and update after every change.**
 One file per host, network, domain or service in `~/.infra`; secrets in a vault, never in the docs.
 Git sync with section-aware merges keeps every device's copy current, and it can generate SSH config, Prometheus targets and a Grafana dashboard.
