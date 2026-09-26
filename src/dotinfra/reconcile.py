@@ -4,7 +4,11 @@ A component file is merged as structured data rather than as lines:
 
 * frontmatter keys are merged one by one (lists are unioned, ``updated`` takes the max);
 * the body is split into a preamble plus ``## H2`` sections, merged section by section;
-* History/changelog sections are unioned entry by entry, newest first;
+* History/changelog sections are unioned entry by entry, newest first (legacy:
+  since 0.3 component docs hold current facts only and history goes to the event
+  log, but CMDBs written by older releases still carry such sections);
+* event log files (``events/<YYYY>.md``) are unioned line by line, oldest first
+  (:func:`dotinfra.eventlog.merge_event_text`);
 * only when both sides changed the same section differently does a line-level
   ``git merge-file`` run, and any conflict markers stay inside that section.
 """
@@ -19,6 +23,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .eventlog import is_event_file, merge_event_text
 from .frontmatter import FENCE, FrontmatterError, dump_entry, parse_document
 
 OURS, BASE, THEIRS = "ours", "base", "theirs"
@@ -195,6 +200,8 @@ def split_sections(body: str) -> list[tuple[str | None, str]]:
     return [(key, "".join(lines)) for key, lines in sections]
 
 
+# Legacy (dotinfra < 0.3 wrote dated History sections into component docs; 0.3
+# moves history to the event log). Kept so old CMDBs keep merging cleanly.
 def _is_history(key: str | None) -> bool:
     return key is not None and bool(HISTORY_RE.match(key.split("#")[0].strip()))
 
@@ -306,6 +313,13 @@ def merge_text(base: str, ours: str, theirs: str) -> MergeResult:
     return MergeResult(header + body.text, fm_conflicts + body.conflicts)
 
 
+def merge_file_text(path: str, base: str, ours: str, theirs: str) -> MergeResult:
+    """:func:`merge_text`, except that event log files are unioned (never conflict)."""
+    if path and is_event_file(path):
+        return MergeResult(merge_event_text(base, ours, theirs), 0)
+    return merge_text(base, ours, theirs)
+
+
 def merge_driver(base: Path, ours: Path, theirs: Path, path: str = "") -> int:
     """git merge driver: merge into ``ours`` in place; 0 = clean, 1 = conflicts remain.
 
@@ -314,7 +328,8 @@ def merge_driver(base: Path, ours: Path, theirs: Path, path: str = "") -> int:
     fails harder than git would without it.
     """
     try:
-        result = merge_text(*(p.read_text(encoding="utf-8") for p in (base, ours, theirs)))
+        result = merge_file_text(path, *(p.read_text(encoding="utf-8")
+                                         for p in (base, ours, theirs)))
     except (RuntimeError, OSError, UnicodeError) as exc:
         print(f"dotinfra merge-driver: {path or ours}: {exc}; falling back to git merge-file",
               file=sys.stderr)

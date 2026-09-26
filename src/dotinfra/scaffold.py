@@ -16,6 +16,7 @@ from . import DotinfraError
 from .config import CONFIG_NAME, DEFAULT_ROOT, STATE_DIR, Config, load_config, set_toml_value
 from .context import get_context
 from .frontmatter import FENCE, dump_scalar
+from .eventlog import EVENTS_DIR
 from .index import write_index
 from .managed import style_for, wrap
 from .model import FOLDERS, ID_RE, KINDS, load_cmdb
@@ -211,10 +212,11 @@ def copy_example(root: Path, example: str) -> list[str]:
         raise DotinfraError(f"no bundled example {example!r} "
                             f"(available: {', '.join(available) or 'none'})")
     copied = []
-    for folder in KINDS:
+    for folder in (*KINDS, EVENTS_DIR):
         for path in sorted((source / folder).glob("*.md")):
             target = root / folder / path.name
             if not target.exists():
+                target.parent.mkdir(exist_ok=True)
                 shutil.copyfile(path, target)
                 copied.append(f"example {folder}/{path.name}")
     return copied

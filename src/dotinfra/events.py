@@ -1,8 +1,15 @@
-"""Infrastructure event log stored as Grafana annotations.
+"""The infrastructure event log: outages, maintenance, changes, incidents, observations.
 
-Each event is an organisation-wide annotation tagged ``dotinfra``,
-``host:<component id>`` and ``type:<type>``; the fleet dashboard shows them on
-every time series, coloured by type.
+Component docs describe what *is*; what *happened* goes here. Two backends,
+chosen by ``[events] backend`` in ``.dotinfra.toml``:
+
+* ``grafana`` — each event is an organisation-wide annotation tagged ``dotinfra``,
+  ``host:<component id>`` and ``type:<type>``; the fleet dashboard shows them on
+  every time series, coloured by type.
+* ``file`` — one line per event in ``events/<YYYY>.md`` inside the CMDB
+  (:mod:`dotinfra.eventlog`), synced with it and union-merged.
+* ``auto`` (default) — ``grafana`` when a monitoring service component or a
+  Grafana URL is configured, else ``file``.
 """
 
 from __future__ import annotations
@@ -13,9 +20,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import DotinfraError
+from . import eventlog
 from .grafana import EVENT_TAG, EVENT_TYPES, client_from_context
 
 VALID_TYPES = tuple(EVENT_TYPES)
+BACKENDS = ("auto", "grafana", "file")
 
 _RELATIVE = re.compile(r"^-?(\d+)\s*([smhdw])(?:\s*ago)?$", re.IGNORECASE)
 _UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
@@ -123,6 +132,22 @@ def format_events(annotations: list[dict]) -> str:
 
 # ---------------------------------------------------------------- CLI
 
+def backend_of(ctx) -> str:
+    """``"grafana"`` or ``"file"`` for this CMDB (resolving ``auto``)."""
+    backend = str(ctx.config.get("events", "backend", "auto") or "auto").lower()
+    if backend not in BACKENDS:
+        raise DotinfraError(f"[events] backend must be one of {', '.join(BACKENDS)}, "
+                            f"not {backend!r}")
+    if backend != "auto":
+        return backend
+    if ctx.config.get("monitoring", "grafana_url"):
+        return "grafana"
+    service = str(ctx.config.get("monitoring", "service", "monitoring") or "")
+    if service and any(c.id == service for c in ctx.components()):
+        return "grafana"
+    return "file"
+
+
 def _cmd_add(args) -> int:
     from .context import get_context
 
@@ -139,6 +164,15 @@ def _cmd_add(args) -> int:
     known = {c.id for c in ctx.components()}
     if known and args.host not in known:
         print(f"warning: '{args.host}' is not a component id in {ctx.root}", file=sys.stderr)
+    if backend_of(ctx) == "file":
+        if any(sep in args.host for sep in ("·", " ")):
+            raise DotinfraError(f"invalid host {args.host!r} for the file event log")
+        event = eventlog.add_event(ctx.root, eventlog.Event(
+            payload["time"], args.host, args.type, payload["text"], payload.get("timeEnd")))
+        rel = eventlog.year_path(ctx.root, event.time_ms).relative_to(ctx.root).as_posix()
+        print(f"event {event.id} added: {args.host} {args.type} ({rel}; "
+              "`dotinfra sync` shares it)")
+        return 0
     result = client_from_context(ctx).request("POST", "/api/annotations", payload)
     print(f"event {result.get('id', '?')} added: {args.host} {args.type}")
     return 0
@@ -152,8 +186,13 @@ def _cmd_list(args) -> int:
         since = parse_time(args.since) if args.since else None
     except ValueError as e:
         raise DotinfraError(str(e)) from None
-    data = client_from_context(ctx).request(
-        "GET", "/api/annotations", params=list_params(args.host, args.type, args.limit, since))
+    if backend_of(ctx) == "file":
+        chosen = eventlog.select(eventlog.load_events(ctx.root), host=args.host,
+                                 etype=args.type, since_ms=since, limit=args.limit)
+        data = [e.as_annotation() for e in chosen]
+    else:
+        data = client_from_context(ctx).request(
+            "GET", "/api/annotations", params=list_params(args.host, args.type, args.limit, since))
     if args.json:
         print(json.dumps(data, indent=2))
     else:
@@ -165,6 +204,16 @@ def _cmd_rm(args) -> int:
     from .context import get_context
 
     ctx = get_context(args)
+    if backend_of(ctx) == "file":
+        try:
+            event = eventlog.remove_event(ctx.root, str(args.id))
+        except KeyError:
+            raise DotinfraError(f"no event {args.id!r} in {eventlog.EVENTS_DIR}/ "
+                                "(ids look like 2026.3; see `dotinfra event list`)") from None
+        print(f"event {args.id} deleted: {event.line()[2:]}")
+        return 0
+    if not str(args.id).isdigit():
+        raise DotinfraError(f"Grafana event ids are numbers, not {args.id!r}")
     client_from_context(ctx).request("DELETE", f"/api/annotations/{args.id}")
     print(f"event {args.id} deleted")
     return 0
@@ -172,9 +221,11 @@ def _cmd_rm(args) -> int:
 
 def register(subparsers) -> None:
     p = subparsers.add_parser(
-        "event", help="infra event log (Grafana annotations)",
-        description="Record and list infrastructure events as Grafana annotations "
-                    f"(types: {', '.join(VALID_TYPES)}).")
+        "event", help="infra event log (Grafana annotations or events/<YYYY>.md)",
+        description="Record and list infrastructure events (types: "
+                    f"{', '.join(VALID_TYPES)}). [events] backend in .dotinfra.toml picks "
+                    "Grafana annotations or the file log events/<YYYY>.md in the CMDB; "
+                    "auto = grafana when monitoring is configured, else file.")
     sub = p.add_subparsers(dest="event_cmd", metavar="COMMAND", required=True)
 
     a = sub.add_parser("add", help="record an event")
@@ -190,9 +241,9 @@ def register(subparsers) -> None:
     ls.add_argument("--type", choices=VALID_TYPES)
     ls.add_argument("--since", help="only events after this time ('-7d', ISO 8601)")
     ls.add_argument("--limit", type=int, default=50)
-    ls.add_argument("--json", action="store_true", help="raw annotation JSON")
+    ls.add_argument("--json", action="store_true", help="annotation-shaped JSON")
     ls.set_defaults(func=_cmd_list)
 
     rm = sub.add_parser("rm", help="delete an event by id")
-    rm.add_argument("id", type=int)
+    rm.add_argument("id", help="Grafana annotation id, or YEAR.N for the file backend")
     rm.set_defaults(func=_cmd_rm)

@@ -37,6 +37,9 @@ DEFAULTS: dict[str, dict] = {
         "grafana_password_key": "grafana_password",
         "bundle_dir": "~/dotinfra-monitoring",
     },
+    # "auto": grafana when a monitoring service or URL is configured, else events/<YYYY>.md
+    "events": {"backend": "auto"},
+    "lint": {"max_lines": 120},
 }
 
 

@@ -28,3 +28,9 @@ service = "monitoring"           # component id of the monitoring service (runs_
 grafana_user = "admin"
 grafana_password_key = "grafana_password"   # vault key, not the password
 bundle_dir = "~/dotinfra-monitoring"
+
+[events]
+backend = "auto"                 # "auto" | "grafana" | "file" (events/<YYYY>.md in the CMDB)
+
+[lint]
+max_lines = 120                  # warn when a component body is longer (docs are fact sheets)

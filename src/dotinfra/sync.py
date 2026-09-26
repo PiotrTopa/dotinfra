@@ -22,9 +22,10 @@ from pathlib import Path
 from . import DotinfraError
 from .config import CONFIG_NAME, set_toml_value
 from .context import Context, get_context
+from .eventlog import is_event_file
 from .index import INDEX_NAME, is_stale, write_index
 from .lint import format_issue, run_lint
-from .reconcile import conflict_blocks, has_conflict_markers, merge_text
+from .reconcile import conflict_blocks, has_conflict_markers, merge_file_text
 from .versioning import GUARD_EXIT, installed_version, is_newer
 
 LOCK_STALE_SECONDS = 600
@@ -193,12 +194,15 @@ def _reconcile_file(root: Path, rel: str) -> bool:
     for n in (1, 2, 3):
         blob = subprocess.run(["git", "-C", str(root), "show", f":{n}:{rel}"], capture_output=True)
         if blob.returncode != 0:
+            if n == 1 and is_event_file(rel):
+                stages.append("")  # both devices started the same year's event log
+                continue
             return False  # added/deleted on one side: needs a human decision
         try:
             stages.append(blob.stdout.decode("utf-8"))
         except UnicodeDecodeError:
             return False  # not text we understand; git's own markers stay
-    result = merge_text(*stages)
+    result = merge_file_text(rel, *stages)
     (root / rel).write_text(result.text, encoding="utf-8")
     return result.clean
 
