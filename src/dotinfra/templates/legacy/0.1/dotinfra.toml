@@ -1,12 +1,8 @@
-# dotinfra configuration, shared by every device — see
-# https://github.com/PiotrTopa/dotinfra/blob/main/docs/spec.md
-# Machine-specific overrides (device name, vault paths, monitoring role, URLs
-# reached over a VPN) go in .dotinfra.local.toml next to this file (untracked).
+# dotinfra configuration — see https://github.com/PiotrTopa/dotinfra/blob/main/docs/spec.md
 
 [cmdb]
 name = "{{name}}"                # shown in INDEX.md and dashboards
-schema = {{schema}}                       # CMDB layout version; `dotinfra migrate` updates it
-min_version = "{{min_version}}"          # oldest dotinfra allowed to write here (set by migrate)
+device = ""                      # this device's name in sync commits; "" = hostname
 
 [vault]
 backend = "file"                 # "file" | "age"
@@ -17,14 +13,13 @@ age_recipients = []              # public keys of every device (vault identity /
 
 [sync]
 remote = "origin"                # hub remote; "" = peers only
-remote_url = "{{remote_url}}"    # clone URL shown in README.md ("" = not known yet)
 peers = []                       # other devices' remotes (dotinfra peer add NAME URL)
 auto_commit = true
 branch = "main"
 
 [monitoring]
-service = "monitoring"           # component id of the monitoring service (runs_on = its host)
-# grafana_url / prometheus_url: only to override what is derived from that component
+prometheus_url = "http://localhost:9090"
+grafana_url = "http://localhost:3000"
 grafana_user = "admin"
 grafana_password_key = "grafana_password"   # vault key, not the password
 bundle_dir = "~/dotinfra-monitoring"

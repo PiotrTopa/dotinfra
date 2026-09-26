@@ -22,7 +22,10 @@ class InitTest(IsolatedTestCase):
         for folder in ("servers", "networks", "domains", "routers", "services", "devices"):
             self.assertTrue((root / folder).is_dir(), folder)
         self.assertTrue((root / ".dotinfra/state").is_dir())
-        self.assertEqual((root / "CLAUDE.md").read_text(), "@AGENTS.md\n")
+        claude = (root / "CLAUDE.md").read_text()
+        self.assertIn("\n@AGENTS.md\n", claude)
+        self.assertTrue(claude.startswith("<!-- dotinfra:managed:start v="))
+        self.assertIn(".dotinfra.local.toml", (root / ".gitignore").read_text())
         self.assertIn("*.md merge=dotinfra", (root / ".gitattributes").read_text())
         self.assertIn(".dotinfra/state/", (root / ".gitignore").read_text())
         self.assertIn('name = "lab"', (root / ".dotinfra.toml").read_text())

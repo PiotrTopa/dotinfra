@@ -1,0 +1,4 @@
+# dotinfra: local state, private notes and plaintext vaults never leave this device
+.dotinfra/state/
+*.local.md
+vault.json
