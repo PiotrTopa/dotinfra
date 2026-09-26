@@ -114,7 +114,8 @@ def render_targets_json(groups: list[dict]) -> str:
 def write_targets(targets: dict[str, list[dict]], outdir: Path) -> tuple[list[Path], list[Path]]:
     """Write ``<job>.json`` per job into *outdir*; prune stale job files.
 
-    Files named ``custom-*.json`` are never touched. Returns (written, removed).
+    Only files that look like dotinfra's own output (a file_sd list of target
+    groups) are pruned, and ``custom-*.json`` never is. Returns (written, removed).
     Files are replaced atomically so Prometheus never reads a half-written file.
     """
     outdir.mkdir(parents=True, exist_ok=True)
@@ -125,10 +126,21 @@ def write_targets(targets: dict[str, list[dict]], outdir: Path) -> tuple[list[Pa
         _atomic_write(path, render_targets_json(groups))
         written.append(path)
     for path in sorted(outdir.glob("*.json")):
-        if path.name not in wanted and not path.name.startswith(CUSTOM_PREFIX):
+        if (path.name not in wanted and not path.name.startswith(CUSTOM_PREFIX)
+                and _looks_generated(path)):
             path.unlink()
             removed.append(path)
     return written, removed
+
+
+def _looks_generated(path: Path) -> bool:
+    """True for a file_sd file of the shape ``write_targets`` produces (or an empty list)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, list) and all(
+        isinstance(group, dict) and "targets" in group and "labels" in group for group in data)
 
 
 def _atomic_write(path: Path, text: str) -> None:

@@ -104,11 +104,13 @@ class WriteTargetsTest(unittest.TestCase):
             out = Path(tmp)
             (out / "stale.json").write_text("[]")
             (out / "custom-extra.json").write_text("[]")
+            (out / "unrelated.json").write_text('{"not": "a file_sd file"}')  # never ours
             targets, _ = monitoring.build_targets(FLEET)
             written, removed = monitoring.write_targets(targets, out)
             self.assertEqual(sorted(p.name for p in written), ["dcgm.json", "node.json", "snmp.json"])
             self.assertEqual([p.name for p in removed], ["stale.json"])
             self.assertTrue((out / "custom-extra.json").exists())
+            self.assertTrue((out / "unrelated.json").exists())
             data = json.loads((out / "node.json").read_text())
             self.assertEqual(len(data), 4)  # gpu1, nas, sick, viassh
             self.assertFalse(list(out.glob(".*.tmp")))
