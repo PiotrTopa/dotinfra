@@ -97,6 +97,8 @@ dotinfra sync            # commit + exchange with other devices + push
 ```
 
 `dotinfra sync` exit code 2 = merge conflict → use the `infra-sync` skill.
+Any command exiting 3 = this dotinfra is older than the CMDB needs → `dotinfra upgrade`.
+Machine-specific settings go in `.dotinfra.local.toml` (untracked), never in `.dotinfra.toml`.
 Lint errors about secret-looking content → use the `infra-vault` skill; never
 silence them with `dotinfra:allow-secret` unless the user confirms it is not a secret.
 

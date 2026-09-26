@@ -1,6 +1,6 @@
 ---
 name: infra-sync
-description: Synchronise the dotinfra infrastructure CMDB between devices and resolve merge conflicts. Use after editing CMDB files, when `dotinfra sync` exits with code 2 or prints CONFLICT, when `.dotinfra/state/RECONCILE.md` exists, when `dotinfra status` shows the CMDB ahead/behind/diverged, when adding a new device, hub or peer, or when the user mentions copies of ~/.infra being out of sync.
+description: Synchronise the dotinfra infrastructure CMDB between devices and resolve merge conflicts. Use after editing CMDB files, when `dotinfra sync` exits with code 2 or prints CONFLICT, when a dotinfra command exits with code 3 (dotinfra too old for the CMDB), when `.dotinfra/state/RECONCILE.md` exists, when `dotinfra status` shows the CMDB ahead/behind/diverged, when adding a new device, hub or peer, or when the user mentions copies of ~/.infra being out of sync.
 ---
 
 # Infra sync and conflict reconciliation
@@ -19,9 +19,28 @@ dotinfra sync            # safe to run any time; idempotent
 dotinfra sync --dry-run  # show what would happen
 ```
 
-Exit codes: `0` done, `2` conflicts need you, anything else = error (read it).
+Exit codes: `0` done, `2` conflicts need you, `3` this device's dotinfra is
+older than the CMDB's `min_version` (see below), anything else = error (read it).
 Never "fix" sync problems with `rsync`, `cp`, `git reset --hard`, `git push --force`
 or by deleting and re-cloning — each silently discards another device's edits.
+
+## When a command exits 3: upgrade, then sync
+
+Another device migrated the CMDB with a newer dotinfra. Sync refused to merge
+its commits; local edits are committed and kept. Do not edit `min_version`
+and do not merge by hand:
+
+```sh
+dotinfra upgrade         # updates dotinfra, then runs `dotinfra migrate --yes` here
+dotinfra sync
+```
+
+`dotinfra upgrade` refuses to upgrade a source checkout (use `git pull` there)
+or a system-wide install. Tell the user when that happens. After an upgrade,
+`dotinfra migrate` refreshes the managed blocks in README.md, AGENTS.md,
+CLAUDE.md, .gitignore and .gitattributes, plus the skills, and commits
+`migrate: dotinfra X.Y.Z`. Leave text between `dotinfra:managed` markers
+alone: the next migrate would overwrite it anyway.
 
 ## When sync exits 2: reconcile
 
@@ -81,6 +100,8 @@ secret changed on the other device and run `dotinfra vault rekey`.
   the merge driver in the clone's git config; plain `git pull` would not use it),
   `dotinfra skills install`, `dotinfra doctor`, then give it the vault: copy the
   file vault out of band, or `dotinfra vault identity` + re-key (`infra-vault` skill).
+  The CMDB's own README.md ("Start here — new machine") lists the same steps
+  for humans, with the real clone URL.
 
 ## Migrating copies that were kept in sync with rsync/scp
 

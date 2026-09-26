@@ -7,6 +7,28 @@ description: Monitoring for a dotinfra CMDB — Prometheus scrape targets genera
 
 Everything is derived from the CMDB; never hand-edit generated files.
 
+## Where it runs: one monitoring host
+
+The stack runs on **one** machine: the `runs_on:` server of the service
+component named by `[monitoring] service` (default `services/monitoring.md`).
+Start every monitoring task with:
+
+```sh
+dotinfra monitoring where            # service, host, Grafana/Prometheus URLs, this device's role
+dotinfra monitoring where --check    # ...and whether both answer
+```
+
+- `this device: server` means you are on the monitoring host: deploy and change
+  the stack here. Every `dotinfra sync` here refreshes the scrape targets.
+- `this device: client`: do not render or start a bundle here. Change the CMDB
+  (`metrics:`, the service component) and sync; the server applies it on its
+  next sync. To act on the stack itself, work on the host (SSH via the CMDB).
+- URLs are resolved from the service component: `url` gives Grafana and
+  `prometheus_url` gives Prometheus. Without them, `http://<address>:3000`
+  and `:9090` are used, where the address is the service's own or its
+  `runs_on` server's. Explicit `grafana_url`/`prometheus_url` override this;
+  put per-device ones (a VPN address) in `.dotinfra.local.toml`.
+
 | source in CMDB | generated | command |
 |---|---|---|
 | `metrics: [job:port]` + `address` + `status` | `targets/<job>.json` (Prometheus file_sd) | `dotinfra monitoring targets` |
@@ -18,8 +40,10 @@ Only components with `status: active` or `degraded` are scraped. Labels on
 every target: `job`, `host` (= component id), `instance` (`<id>:<port>`),
 `role` (`fleet`|`infra`), `kind`. Query by `host`, never by IP.
 
-Config lives in `[monitoring]` of `.dotinfra.toml` (`grafana_url`,
-`grafana_user`, `grafana_password_key` = vault key, `bundle_dir`).
+Config lives in `[monitoring]` of `.dotinfra.toml` (`service`, `grafana_user`,
+`grafana_password_key` = vault key, `bundle_dir`; optional URL overrides) and,
+per device, of `.dotinfra.local.toml` (`role = "server"|"client"`, `bundle_dir`,
+URL overrides).
 
 ## Add a host to monitoring
 
@@ -31,12 +55,16 @@ Config lives in `[monitoring]` of `.dotinfra.toml` (`grafana_url`,
    make sure `address` is reachable *from the monitoring host* (use the VPN
    address for roaming/remote hosts), add `fleet` to `tags` if it belongs on the
    dashboard. History line, `updated:`.
-4. `dotinfra lint && dotinfra sync`, then on the monitoring host:
-   `dotinfra monitoring targets`. Prometheus picks it up within a minute — no restart.
+4. `dotinfra lint && dotinfra sync`. The monitoring host's next sync rewrites
+   the targets (`role = "server"`; run `dotinfra sync` there to apply it
+   now). Prometheus picks them up within a minute, with no restart.
 5. Verify: `curl -s http://<prometheus>/api/v1/targets | grep '"host":"ID"'` or
    the dashboard's "All scrape targets" panel.
 
 ## Deploy or update the stack
+
+On the monitoring host only (first time: `dotinfra monitoring setup-server`,
+which records `role = "server"` locally and renders the bundle):
 
 ```sh
 dotinfra monitoring render                 # to monitoring.bundle_dir (default ~/dotinfra-monitoring)
@@ -49,7 +77,12 @@ chmod 600 .env && docker compose up -d     # add --profile node to monitor this 
   `--force` resets them. Targets and dashboard are always regenerated.
 - Prometheus history is in the `prometheus_data` volume at `/prometheus`;
   never `docker compose down -v` unless the user wants to delete history.
-- Record the deployment in `services/monitoring.md` (`runs_on:` the host).
+- Record the deployment in `services/monitoring.md` (`runs_on:` the host,
+  `url:` Grafana, optionally `prometheus_url:`), and `dotinfra timer install`
+  on the host so targets stay current.
+- Moving the stack to another machine: change `runs_on:` (and the URLs), run
+  `setup-server` on the new host and set `role = "client"` (or delete the
+  line) in the old host's `.dotinfra.local.toml`.
 - Existing Grafana instead of the bundle: `dotinfra grafana push [--home]`
   (password from the vault; needs a Prometheus datasource, ideally with uid
   `dotinfra-prometheus`). A dashboard provisioned from files cannot also be pushed.

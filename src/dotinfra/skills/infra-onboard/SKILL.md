@@ -29,17 +29,33 @@ Ask, and accept short answers:
    through a jump host. Which user and SSH key?
 4. Which devices will hold a copy of the CMDB? (this one only / also laptop X /
    a hub: private GitHub repo or a server with SSH)
-5. Do you want monitoring (Prometheus + Grafana) now, later, or never?
-6. May I scan the local network with `nmap -sn`? (default: no)
+5. Do you want monitoring (Prometheus + Grafana) now, later, or never? If so,
+   which one always-on machine should run it? (Only one device runs the stack.)
+6. Which AI agents do you use? (Claude Code, GitHub Copilot, Cline, Antigravity,
+   Codex, Gemini CLI; default: the ones installed here)
+7. May I scan the local network with `nmap -sn`? (default: no)
 
 ## 2. Initialise
 
 ```sh
-dotinfra init --name NAME --skills both   # ~/.infra with git, AGENTS.md, templates; skills into ~/.claude and ~/.agents
+dotinfra init --name NAME --yes                            # detected agents' skills
+dotinfra init --name NAME --remote URL --skills claude,copilot,agy --yes
 ```
 
-`init` writes `AGENTS.md` (the rules) and `CLAUDE.md` (`@AGENTS.md`), so Claude
-Code, Codex and other agents pick them up whenever they work inside the CMDB.
+`--remote URL` (the private hub, if the user already has one) adds the git
+remote and writes the clone URL into the CMDB's README. `--skills LIST` picks
+agents (`claude`, `agents`, `copilot`, `cline`, `antigravity`/`agy`, `codex`,
+`gemini`, `all`, `none`). The default is the agents detected on this machine.
+Skills go into the user's home directory and into the CMDB itself (committed),
+so every clone carries them. Always pass `--yes`: without a terminal, `init`
+does not ask anyway.
+
+`init` writes `AGENTS.md` (the rules), `CLAUDE.md` (`@AGENTS.md`) and a
+`README.md` whose "Start here — new machine" section tells anyone with access
+to the private repo how to set up another device. Claude Code, Codex, Copilot
+and other agents pick up the rules whenever they work inside the CMDB. Keep
+machine-specific settings (`[cmdb] device`, vault paths, monitoring role) in
+`~/.infra/.dotinfra.local.toml`, which git ignores, not in `.dotinfra.toml`.
 
 ## 3. Discover (read-only, no changes to any host)
 
@@ -102,17 +118,23 @@ Fix every error. Warnings about missing `role`/`updated` are worth fixing now.
 
 ## 8. Sync to other devices (if requested)
 
-- Hub: create a **private** repo, `git -C ~/.infra remote add origin URL`,
-  `dotinfra sync`. On each other device: install dotinfra,
-  `git clone URL ~/.infra && dotinfra sync && dotinfra skills install`.
+- Hub: create a **private** repo. If `init` did not get `--remote URL`, run
+  `git -C ~/.infra remote add origin URL`, then `dotinfra migrate` (it records
+  the clone URL in README.md) and `dotinfra sync`. On each other device follow
+  the README's "Start here — new machine": install dotinfra,
+  `git clone URL ~/.infra`, `cd ~/.infra && dotinfra doctor`, `dotinfra skills install`.
 - Peers without a hub: `dotinfra peer add laptop ssh://laptop/~/.infra` on each side.
 - Background sync: `dotinfra timer install --interval 15m` on each device.
 - Vault on other devices: see `infra-vault` (age backend syncs; file backend is copied out of band).
 
 ## 9. Monitoring (if requested)
 
-Hand over to the `infra-monitoring` skill: add `metrics: [node:9100]` to hosts
-that run node_exporter, `dotinfra monitoring render`, start the stack.
+Hand over to the `infra-monitoring` skill: record the stack as
+`services/monitoring.md` with `runs_on: <the chosen host>`, add
+`metrics: [node:9100]` to hosts that run node_exporter, then **on that host**
+run `dotinfra monitoring setup-server`, start the stack and
+`dotinfra timer install`. Other devices stay clients; `dotinfra monitoring where`
+shows them where Grafana is.
 
 ## 10. Wrap up
 

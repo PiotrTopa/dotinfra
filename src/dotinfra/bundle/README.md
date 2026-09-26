@@ -45,10 +45,13 @@ Each target carries the labels `job`, `host` (component id), `instance`
 (`<id>:<port>`), `role` (`fleet`|`infra`) and `kind`. Prometheus re-reads the
 directory every minute; you never need to restart it for host changes.
 
-Keep targets current after CMDB edits, e.g. from cron on the monitoring host:
+Keep targets current after CMDB edits: make this machine the monitoring host
+(`dotinfra monitoring setup-server`, which sets `role = "server"` in
+`.dotinfra.local.toml`) and run `dotinfra timer install`. Every successful sync
+then rewrites the targets. Without the role, a cron line works too:
 
 ```sh
-*/10 * * * * dotinfra sync --no-push >/dev/null 2>&1; dotinfra monitoring targets >/dev/null
+*/10 * * * * dotinfra sync --no-push >/dev/null 2>&1; dotinfra monitoring targets --force >/dev/null
 ```
 
 Hand-written extra targets go in `targets/custom-*.json`; dotinfra never touches
