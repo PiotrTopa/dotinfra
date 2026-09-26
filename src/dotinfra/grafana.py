@@ -348,12 +348,17 @@ class GrafanaClient:
 def client_from_context(ctx) -> GrafanaClient:
     """Build a client from ``[monitoring]`` config; credentials come from the vault.
 
+    The URL comes from :func:`dotinfra.monitoring.monitoring_endpoints` (explicit
+    ``grafana_url``, else the monitoring service component).
+
     If ``monitoring.grafana_token_key`` is set, that vault key holds a service
     account token (Bearer auth). Otherwise basic auth with ``grafana_user`` and
     the password stored under ``grafana_password_key``.
     """
+    from .monitoring import monitoring_endpoints
+
     get = ctx.config.get
-    url = get("monitoring", "grafana_url", "http://localhost:3000")
+    url = monitoring_endpoints(ctx, need=("grafana",))[0]
     token_key = get("monitoring", "grafana_token_key", "") or ""
     key = token_key or get("monitoring", "grafana_password_key", "grafana_password")
     try:

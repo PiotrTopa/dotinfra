@@ -163,6 +163,9 @@ class FakeCtx:
         self.secrets = secrets
         self.asked = []
 
+    def components(self):
+        return []
+
     def secret(self, key):
         self.asked.append(key)
         if key not in self.secrets:
