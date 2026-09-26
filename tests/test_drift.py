@@ -100,6 +100,14 @@ class ProbeTest(DriftTestCase):
         facts |= {"os": "Debian GNU/Linux 13 (trixie)", "ips": ["10.0.0.7"]}
         self.assertEqual([d.field for d in compare(web1, facts)], ["os", "address"])
 
+    def test_os_point_release_is_not_drift(self):
+        web1 = self.components()["web1"]
+        web1.meta["os"] = "Ubuntu 24.04 LTS"
+        facts = parse_probe(PROBE_OUTPUT) | {"os": "Ubuntu 24.04.1 LTS"}
+        self.assertEqual(compare(web1, facts), [])
+        facts["os"] = "Ubuntu 24.10"
+        self.assertEqual([d.field for d in compare(web1, facts)], ["os"])
+
     def test_unsafe_ssh_values_are_refused(self):
         self.write(self.root, "servers/dash.md", component(
             "status: active\naddress: 10.0.0.8\nssh:\n  user: -oProxyCommand=evil"))

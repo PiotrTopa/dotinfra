@@ -128,8 +128,8 @@ def ssh_command(component: Component, components: dict[str, Component]) -> list[
 def run_probe(cmd: list[str]) -> str:
     """Run the probe script through ``cmd`` and return its stdout."""
     try:
-        result = subprocess.run(cmd, input=PROBE_SCRIPT, capture_output=True, text=True,
-                                timeout=SSH_TIMEOUT)
+        result = subprocess.run(cmd, input=PROBE_SCRIPT, capture_output=True,
+                                encoding="utf-8", errors="replace", timeout=SSH_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise DotinfraError(f"timed out after {SSH_TIMEOUT}s") from None
     except FileNotFoundError:
@@ -162,6 +162,16 @@ def _tokens(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+(?:\.[0-9]+)*", text.lower()))
 
 
+def os_matches(declared: str, probed: str) -> bool:
+    """Every word of the documented OS appears in the probed name.
+
+    Version words may be extended by a point release: ``24.04`` matches ``24.04.1``.
+    """
+    probed_tokens = _tokens(probed)
+    return all(any(p == t or p.startswith(t + ".") for p in probed_tokens)
+               for t in _tokens(declared))
+
+
 def _norm(value) -> str:
     if isinstance(value, (list, tuple)):
         return ",".join(sorted(str(v) for v in value))
@@ -171,7 +181,7 @@ def _norm(value) -> str:
 def compare(component: Component, facts: dict) -> list[Drift]:
     drifts = []
     declared_os = component.meta.get("os")
-    if declared_os and facts.get("os") and not _tokens(str(declared_os)) <= _tokens(facts["os"]):
+    if declared_os and facts.get("os") and not os_matches(str(declared_os), facts["os"]):
         drifts.append(Drift("os", declared_os, facts["os"]))
     address = component.address
     if address and facts.get("ips") and _is_ipv4(address) and address not in facts["ips"]:
