@@ -6,7 +6,7 @@
 > `dotinfra init --example` and edit from there. This note sits outside the
 > `dotinfra:managed` markers, so `dotinfra migrate` keeps it.
 
-<!-- dotinfra:managed:start v=0.2.3 -->
+<!-- dotinfra:managed:start v=0.3.0 -->
 # homelab infrastructure
 
 This repository is a [dotinfra](https://github.com/PiotrTopa/dotinfra) CMDB: a
@@ -16,7 +16,7 @@ private: it holds hostnames and topology, never secret values.
 
 ## Start here — new machine
 
-Needs **dotinfra ≥ 0.2.0**, Python ≥ 3.11, `git` and `ssh`.
+Needs **dotinfra ≥ 0.3.0**, Python ≥ 3.11, `git` and `ssh`.
 
 1. **Install dotinfra**
 

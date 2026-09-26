@@ -6,6 +6,57 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-26
+
+**Documents state what IS; events go to the event log.** Component docs are now
+concise fact sheets of the current state, because agents read them on every task
+and every line costs context. History moves to a separate event log, which now
+also works without Grafana.
+
+### Upgrading
+
+`dotinfra upgrade` (it runs `dotinfra migrate`), then `dotinfra sync`. The
+migration (schema 1 → 2) adds `[events] backend = "auto"` and `[lint] max_lines =
+120` to `.dotinfra.toml`, refreshes the `AGENTS.md`/`README.md` managed blocks with
+the new rules, and raises `min_version` to 0.3.0. **Your component files are not
+rewritten.** Run `dotinfra lint` and fix the new `journal`/`long` warnings, or ask
+an agent: *"Use the infra-cmdb skill to fix the journal warnings in my CMDB."* It
+folds still-true History lines into the facts and moves notable past events to
+`dotinfra event add --time YYYY-MM-DD ...`. Upgrade every device: 0.2.x refuses a
+schema-2 CMDB.
+
+### Changed
+
+- Convention: a component doc has `Overview` (2–3 lines), `Access`,
+  `Configuration` (or `Hardware`/`Services`) and `Constraints & known issues`; facts
+  are edited in place, resolved issues removed, no journal; ≈ ≤ 40 lines for a simple
+  component, ≤ 80 for a complex one. Spec §3.3, [docs/schema.md](docs/schema.md),
+  [docs/concepts.md](docs/concepts.md), the README, the `AGENTS.md` and CMDB README
+  templates and the `infra-cmdb`, `infra-onboard`, `infra-sync`, `infra-vault` and
+  `infra-monitoring` skills say so and explain why.
+- The six component templates have no `History` section and no dated "created"
+  line; vault key names are listed under `Access`.
+- The example CMDB (`examples/homelab`) is rewritten in that style; its former
+  history is in `events/2026.md`.
+- The History-section union in the merge driver is kept for CMDBs written by older
+  releases and documented as legacy.
+
+### Added
+
+- `[events] backend = "auto" | "grafana" | "file"`. `file` appends one line per event
+  to `events/<YYYY>.md` in the CMDB (`- 2026-09-26T07:34Z · nas · maintenance ·
+  replaced disk 2`); it syncs with the CMDB, is not a component (not loaded, indexed
+  or checked by component lint rules) and agents do not read it by default. `auto`
+  picks Grafana when a monitoring service or `grafana_url` is configured, else
+  `file`. `event list` takes the same filters on both backends; `event rm YEAR.N`
+  deletes a file-backend event. New [docs/events.md](docs/events.md).
+- The merge driver unions `events/*.md` line by line, sorted by timestamp, so two
+  devices appending events never conflict (also when both created the year file).
+- Lint warnings `journal` (an H2 like History/Changelog/Log/Event history, or more
+  than 5 lines starting with a date) and `long` (body over `[lint] max_lines`,
+  default 120). Warnings only; lint still exits 0.
+- `dotinfra init --example` also copies the example's `events/`.
+
 ## [0.2.3] — 2026-09-26
 
 ### Fixed
@@ -186,7 +237,8 @@ First public release.
   Grafana annotations (`event add|list|rm`).
 - Fictional example CMDB `examples/homelab`.
 
-[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.0...v0.2.1

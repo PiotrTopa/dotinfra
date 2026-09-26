@@ -6,7 +6,7 @@
 [cmdb]
 name = "homelab"
 schema = 2                       # CMDB layout version; `dotinfra migrate` updates it
-min_version = "0.2.0"            # oldest dotinfra allowed to write here (set by migrate)
+min_version = "0.3.0"  # oldest dotinfra allowed to write here (set by migrate)
 
 [vault]
 backend = "file"

@@ -1,4 +1,4 @@
-<!-- dotinfra:managed:start v=0.2.3 -->
+<!-- dotinfra:managed:start v=0.3.0 -->
 # Infrastructure CMDB — rules for AI agents
 
 This folder is the source of truth for the infrastructure of **homelab**: one
