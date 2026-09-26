@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-09-26
+
+### Added
+
+- `labels:` frontmatter map: extra Prometheus target labels, and `host` to keep an
+  existing series name (e.g. an uppercase hostname) when adopting dotinfra on a
+  running monitoring stack. Invalid or reserved label names are lint errors.
+
 ## [0.2.0] — 2026-09-26
 
 Upgrading from 0.1.x: `pipx upgrade dotinfra` (or `pip install --user -U
@@ -119,7 +127,8 @@ First public release.
   Grafana annotations (`event add|list|rm`).
 - Fictional example CMDB `examples/homelab`.
 
-[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/PiotrTopa/dotinfra/releases/tag/v0.2.1
 [0.2.0]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PiotrTopa/dotinfra/releases/tag/v0.1.0

@@ -16,6 +16,8 @@ from .context import get_context
 from .model import (ID_RE, KNOWN_KEYS, SSH_KEYS, STATUSES, Component, as_list, parse_metric,
                     scan_cmdb)
 
+LABEL_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
 STALE_AFTER = timedelta(days=180)
 ALLOW_MARKER = "dotinfra:allow-secret"
 MAX_SCAN_BYTES = 1_000_000
@@ -73,6 +75,13 @@ def _check_component(c: Component, ids: set[str], today: date, strict: bool) -> 
         if parse_metric(entry) is None:
             add("error", "metrics", f"malformed metrics entry {entry!r} (expected job:port)",
                 "metrics")
+    labels = c.meta.get("labels")
+    if labels is not None and not isinstance(labels, dict):
+        add("error", "labels", "labels must be a map of Prometheus label: value", "labels")
+    elif labels:
+        for name in labels:
+            if not LABEL_RE.match(str(name)) or name in ("job", "instance") or str(name).startswith("__"):
+                add("error", "labels", f"invalid or reserved Prometheus label {name!r}", "labels")
     if not c.meta.get("role"):
         add("warning", "role", "missing role (one line describing its purpose)", "role")
     _check_updated(c, today, add)

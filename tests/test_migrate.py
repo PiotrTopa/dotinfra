@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import IsolatedTestCase, git, run_cli
+from dotinfra import __version__
 from dotinfra import managed
 from dotinfra.managed import (ADOPTED, CREATED, HASH, INSERTED, MD, UNCHANGED, UPDATED,
                               find_block, refresh, wrap)
@@ -132,8 +133,8 @@ class MigrateLegacyTest(MigrateTestCase):
                       (root / ".dotinfra.toml").read_text())
         for name in ("README.md", "AGENTS.md", "CLAUDE.md", ".gitignore", ".gitattributes"):
             text = (root / name).read_text()
-            self.assertTrue(text.startswith("<!-- dotinfra:managed:start v=0.2.0 -->")
-                            or text.startswith("# dotinfra:managed:start v=0.2.0"), name)
+            self.assertTrue(text.startswith(f"<!-- dotinfra:managed:start v={__version__} -->")
+                            or text.startswith(f"# dotinfra:managed:start v={__version__}"), name)
         self.assertIn("0.1.x template replaced", out)
         readme = (root / "README.md").read_text()
         self.assertIn("## Start here — new machine", readme)
@@ -141,7 +142,7 @@ class MigrateLegacyTest(MigrateTestCase):
         self.assertIn("dotinfra ≥ 0.2.0", readme)
         self.assertIn("git clone <URL of this repository> ~/.infra", readme)
         self.assertIn(".dotinfra.local.toml", (root / ".gitignore").read_text())
-        self.assertEqual(self.commits(root)[0], "migrate: dotinfra 0.2.0")
+        self.assertEqual(self.commits(root)[0], f"migrate: dotinfra {__version__}")
         self.assertEqual(git(root, "status", "--porcelain"), "")
 
     def test_idempotent(self):
@@ -257,7 +258,7 @@ class MigrateSkillsTest(MigrateTestCase):
         self.assertIn("refreshed 1 user-scope skill", out)
         self.assertEqual(project.read_text(), pristine)
         self.assertEqual(user.read_text(), pristine)
-        self.assertEqual(self.commits(root)[0], "migrate: dotinfra 0.2.0")
+        self.assertEqual(self.commits(root)[0], f"migrate: dotinfra {__version__}")
 
 
 if __name__ == "__main__":

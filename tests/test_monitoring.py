@@ -85,6 +85,14 @@ class BuildTargetsTest(unittest.TestCase):
         router = self.targets["snmp"][0]
         self.assertEqual(router["labels"]["kind"], "router")
 
+    def test_label_overrides(self):
+        c = comp("laptop", tags=["fleet"], address="10.10.0.30", metrics=["node:9100"],
+                 labels={"host": "Laptop", "site": "home", "job": "x", "instance": "y",
+                         "bad-name": "z", "__meta": "w"})
+        (g,) = monitoring.build_targets([c])[0]["node"]
+        self.assertEqual(g["labels"], {"job": "node", "host": "Laptop", "instance": "Laptop:9100",
+                                       "role": "fleet", "kind": "server", "site": "home"})
+
     def test_ssh_host_fallback_and_missing_address(self):
         via = next(g for g in self.targets["node"] if g["labels"]["host"] == "viassh")
         self.assertEqual(via["targets"], ["vps.example.net:9100"])

@@ -15,7 +15,7 @@ STATUSES = ("active", "planned", "degraded", "retired")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 KNOWN_KEYS = ("id", "kind", "title", "status", "role", "tags", "address", "os", "ssh",
               "metrics", "secrets", "depends_on", "runs_on", "url", "prometheus_url", "facts",
-              "updated")
+              "labels", "updated")
 SSH_KEYS = ("user", "host", "port", "jump", "key")
 _H1_RE = re.compile(r"^# +(.+?)\s*#*\s*$", re.MULTILINE)
 _UNSAFE_RE = re.compile(r"[\s\x00-\x1f\x7f]")

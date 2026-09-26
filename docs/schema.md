@@ -53,6 +53,7 @@ flow maps (`{a: 1}`).
 | `os` | string | no | e.g. `Debian 12` |
 | `ssh` | map: `user`, `host`, `port`, `jump`, `key` | no | `host` defaults to `address`; `jump` is another component's **id** |
 | `metrics` | list of `job:port` | no | Prometheus targets at `address`, e.g. `[node:9100, dcgm:9400]` |
+| `labels` | map | no | extra Prometheus target labels; `host` overrides the id in `host`/`instance` (keep existing series names, e.g. `host: GPU1`); `job`/`instance` are reserved |
 | `secrets` | list | no | vault **key names** this component needs |
 | `depends_on` | list of ids | no | components this one needs |
 | `runs_on` | id | no (services) | the server hosting a service |

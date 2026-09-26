@@ -12,6 +12,7 @@ tested without a CMDB on disk.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -40,6 +41,24 @@ def host_role(c) -> str:
     return "fleet" if "fleet" in c.tags else "infra"
 
 
+LABEL_NAME = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+RESERVED_LABELS = ("job", "instance")
+
+
+def extra_labels(c) -> dict[str, str]:
+    """Valid entries of the component's ``labels:`` map (extra/overriding target labels).
+
+    ``job`` and ``instance`` are derived and cannot be overridden; ``host``
+    replaces the id in both ``host`` and ``instance`` (keeps existing series names).
+    """
+    raw = c.meta.get("labels")
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items()
+            if LABEL_NAME.match(str(k)) and k not in RESERVED_LABELS and not str(k).startswith("__")
+            and v is not None}
+
+
 def build_targets(components) -> tuple[dict[str, list[dict]], list[str]]:
     """Build file_sd target groups per job.
 
@@ -57,17 +76,13 @@ def build_targets(components) -> tuple[dict[str, list[dict]], list[str]]:
         if not addr:
             warnings.append(f"{c.id}: has metrics but no address (or ssh.host); skipped")
             continue
+        extra = extra_labels(c)
+        host = extra.get("host", c.id)
         for job, port in metrics:
-            group = {
-                "targets": [f"{_hostport(addr, port)}"],
-                "labels": {
-                    "job": job,
-                    "host": c.id,
-                    "instance": f"{c.id}:{port}",
-                    "role": host_role(c),
-                    "kind": c.kind,
-                },
-            }
+            labels = {"job": job, "host": host, "instance": f"{host}:{port}",
+                      "role": host_role(c), "kind": c.kind}
+            labels.update((k, v) for k, v in extra.items() if k != "host")
+            group = {"targets": [f"{_hostport(addr, port)}"], "labels": labels}
             jobs.setdefault(job, []).append(group)
     for groups in jobs.values():
         groups.sort(key=lambda g: (g["labels"]["host"], g["targets"][0]))

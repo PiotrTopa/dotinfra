@@ -116,6 +116,7 @@ back deterministically, preserving key order of the input dict.
 | `os` | str | no | |
 | `ssh` | map: `user, host, port, jump, key` | no | `host` defaults to `address`; `jump` is another component **id** |
 | `metrics` | list[`job:port`] | no | Prometheus scrape targets at `address` |
+| `labels` | map | no | extra Prometheus target labels; `host` overrides the id in `host`/`instance`; `job`/`instance` reserved |
 | `secrets` | list[str] | no | vault keys this component needs |
 | `depends_on` | list[id] | no | ids of other components |
 | `runs_on` | id | no (services) | the server hosting the service |
