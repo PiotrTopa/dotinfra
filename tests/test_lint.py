@@ -102,6 +102,10 @@ class SecretScanTest(LintTestCase):
             "token ghp_" + "a" * 36,
             "openai sk-" + "b" * 24,
             "slack xoxb-1234",
+            "project key sk-proj-" + "c" * 40,
+            "fine-grained github_pat_" + "d" * 30,
+            "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+            "AGE-SECRET-KEY-1" + "Q" * 58,
         ]
         self.add("servers/a.md", GOOD.format(id="a"), "# A\n\n" + "\n".join(leaks) + "\n")
         self.write(self.root, "notes.txt", "password = letmein\n")

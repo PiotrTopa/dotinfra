@@ -20,11 +20,12 @@ STALE_AFTER = timedelta(days=180)
 ALLOW_MARKER = "dotinfra:allow-secret"
 MAX_SCAN_BYTES = 1_000_000
 SECRET_PATTERNS = [
-    ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")),
+    ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----")),
+    ("age identity", re.compile(r"AGE-SECRET-KEY-1[0-9A-Z]{50,}")),
     ("password", re.compile(r"password\s*[:=]\s*\S+", re.IGNORECASE)),
     ("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
-    ("GitHub token", re.compile(r"ghp_[A-Za-z0-9]{36}")),
-    ("API secret key", re.compile(r"sk-[A-Za-z0-9]{20,}")),
+    ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}")),
+    ("API secret key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
     ("Slack token", re.compile(r"xox[baprs]-")),
 ]
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -222,7 +223,7 @@ def cmd_lint(args) -> int:
     else:
         for issue in issues:
             print(format_issue(issue))
-        print(summary(issues, len(ctx.components())))
+        print(summary(issues, len(scan_cmdb(ctx.root)[0])))
     return 1 if any(i.level == "error" for i in issues) else 0
 
 
