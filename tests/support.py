@@ -60,6 +60,10 @@ class IsolatedTestCase(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # never ask the real docker daemon (monitoring render's adoption hint)
+        docker = mock.patch("dotinfra.monitoring._docker_names", return_value=[])
+        docker.start()
+        self.addCleanup(docker.stop)
         os.environ.pop("DOTINFRA_ROOT", None)
         self.home = home
 

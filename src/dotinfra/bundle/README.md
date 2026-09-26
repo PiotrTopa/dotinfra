@@ -17,6 +17,11 @@ bundle/
 
 ## Quick start
 
+> **Already running Grafana or Prometheus on this machine?** Read
+> [Adopting an existing stack](#adopting-an-existing-stack) before the first
+> `docker compose up -d`: starting the bundle's Grafana on a newer Grafana
+> database can corrupt it.
+
 ```sh
 dotinfra monitoring render                  # writes to monitoring.bundle_dir (~/dotinfra-monitoring)
 cd ~/dotinfra-monitoring
@@ -28,6 +33,108 @@ docker compose up -d
 
 Open Grafana at `http://<this host>:3000` and log in as `admin` with the vault
 password. The "Fleet Overview" dashboard is the home page.
+
+## Adopting an existing stack
+
+Do this **before the first `docker compose up -d`** if this machine already
+runs Grafana and/or Prometheus (a hand-written compose file, `docker run`, an
+older setup) and the bundle should take over their data. `dotinfra monitoring
+render` and `setup-server` print a warning when docker has Grafana or
+Prometheus containers or volumes that the bundle does not own, until a
+`docker-compose.override.yml` exists next to the bundle's compose file.
+
+1. **Pin Grafana to at least the version that runs now.** Grafana migrates its
+   database forward on start and cannot migrate it back: an older Grafana on a
+   newer database can corrupt it. The bundle's default tag may well be older
+   than what a `:latest` container pulled. Ask the running container:
+
+   ```sh
+   docker exec <grafana-container> grafana server -v    # e.g. "Version 13.0.4 (...)"
+   echo 'GRAFANA_IMAGE=grafana/grafana:13.0.4' >> .env    # the same version, never older
+   ```
+
+   The same version is safest: nothing is migrated, so rolling back stays
+   possible. Upgrade later as a separate step. Prometheus: check
+   `docker exec <prometheus-container> prometheus --version` and do not go
+   below it either (`PROMETHEUS_IMAGE`).
+
+2. **Find the old data.** List what each old container mounts:
+
+   ```sh
+   docker inspect -f '{{range .Mounts}}{{.Type}} {{.Name}} {{.Source}} -> {{.Destination}}{{println}}{{end}}' \
+     <grafana-container> <prometheus-container>
+   ```
+
+   Grafana keeps its database in `/var/lib/grafana`, Prometheus its TSDB in
+   the directory given by `--storage.tsdb.path` (`/prometheus` in the official
+   image). A volume whose name is 64 hex characters is **anonymous**: it has
+   no stable name and is lost to `docker volume prune` once its container is
+   removed.
+
+3. **Stop the old stack; do not remove it.** Stopped containers keep their
+   volumes (anonymous ones included), so rolling back is one `docker start`.
+
+   ```sh
+   docker stop <grafana-container> <prometheus-container>   # or `docker compose stop` in the old project
+   ```
+
+   Optionally back up the Grafana volume now:
+   `docker run --rm -v <grafana-volume>:/from:ro -v "$PWD":/backup alpine tar czf /backup/grafana-data.tgz -C /from .`
+
+4. **Copy an anonymous Prometheus volume into a named one** (skip this when
+   the TSDB already lives in a named volume). Prometheus must be stopped so the
+   copy is consistent:
+
+   ```sh
+   docker volume create prometheus-history
+   docker run --rm -v <64-hex-volume>:/from:ro -v prometheus-history:/to alpine cp -a /from/. /to/
+   ```
+
+   `cp -a` keeps the file owner (`nobody` in the official image).
+
+5. **Reuse the volumes in `docker-compose.override.yml`**, next to the bundle's
+   `docker-compose.yml`. Docker Compose merges it automatically and
+   `dotinfra monitoring render` never touches it:
+
+   ```yaml
+   # docker-compose.override.yml: keep the data of the stack this bundle replaces.
+   # `external: true` means compose uses these volumes as they are and never
+   # creates or deletes them (not even with `docker compose down -v`).
+   volumes:
+     grafana_data:
+       external: true
+       name: grafana-storage          # the old Grafana volume (step 2)
+     prometheus_data:
+       external: true
+       name: prometheus-history       # the named copy (step 4) or the old named volume
+
+   # Data in a host directory (bind mount) instead of a volume? Mount it over
+   # the same container path; compose replaces the bundle's mount:
+   # services:
+   #   grafana:
+   #     volumes:
+   #       - /srv/grafana:/var/lib/grafana
+   ```
+
+6. **Start and check.**
+
+   ```sh
+   docker compose config --volumes     # shows grafana_data and prometheus_data
+   docker compose up -d
+   docker compose logs grafana | grep -iE 'error|migrat'
+   dotinfra monitoring where --check
+   ```
+
+   The adopted Grafana keeps its users, dashboards, datasources and admin
+   password (`GRAFANA_ADMIN_PASSWORD` only applies to a new database). The
+   bundle adds the datasource "dotinfra Prometheus" next to any existing
+   "Prometheus" one; an old datasource that pointed at the old container's
+   hostname may need its URL changed to `http://prometheus:9090`. To keep
+   existing series names, give components a `labels:` map with `host:`.
+
+7. **Roll back** if anything is wrong: `docker compose down` in the bundle
+   (external volumes are kept), then `docker start` the old containers. Remove
+   the old containers and volumes only after the new stack has run for a while.
 
 ## How targets get here
 

@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
+from unittest import mock
 
 from dotinfra import monitoring
 
@@ -216,6 +217,9 @@ class CliTest(unittest.TestCase):
         self._env = {k: os.environ.get(k) for k in ("DOTINFRA_ROOT", "HOME")}
         os.environ["DOTINFRA_ROOT"] = str(self.root)
         os.environ["HOME"] = self.tmp.name
+        self.docker = mock.patch("dotinfra.monitoring._docker_names", return_value=[])
+        self.docker_names = self.docker.start()
+        self.addCleanup(self.docker.stop)
 
     def tearDown(self):
         for k, v in self._env.items():
@@ -248,6 +252,66 @@ class CliTest(unittest.TestCase):
         self.assertTrue((outdir / "targets" / "node.json").is_file())
         dash = json.loads((outdir / "grafana/dashboards/dotinfra-fleet.json").read_text())
         self.assertEqual(dash["title"], "Fleet Overview — cli-test")
+
+    def test_render_prints_adoption_hint_for_foreign_grafana(self):
+        outdir = Path(self.tmp.name) / "bundle"
+        self.docker_names.side_effect = lambda *a: (
+            ["grafana\tgrafana/grafana:latest"] if a[0] == "ps" else ["grafana-storage"])
+        code, out, err = self.run_cli("monitoring", "render", "--output", str(outdir))
+        self.assertEqual(code, 0, err)
+        self.assertIn("grafana (container, grafana/grafana:latest)", err)
+        self.assertIn("grafana-storage (volume)", err)
+        self.assertIn("Adopting an existing stack", err)
+        self.assertIn("GRAFANA_IMAGE", err)
+        # once the override exists, adoption is done: no more warning
+        (outdir / monitoring.OVERRIDE_FILE).write_text("services: {}\n")
+        code, out, err = self.run_cli("monitoring", "render", "--output", str(outdir))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("Adopting", err)
+
+
+class ExistingStackTest(unittest.TestCase):
+    def run_docker(self, ps: str, volumes: str, returncode: int = 0):
+        def fake_run(cmd, **kwargs):
+            self.assertEqual(kwargs.get("timeout"), 5)
+            out = ps if cmd[1] == "ps" else volumes
+            return mock.Mock(returncode=returncode, stdout=out)
+
+        with mock.patch("dotinfra.monitoring.shutil.which", return_value="/usr/bin/docker"), \
+                mock.patch("dotinfra.monitoring.subprocess.run", side_effect=fake_run) as run:
+            return monitoring.existing_stack(), run
+
+    def test_foreign_containers_and_volumes(self):
+        found, run = self.run_docker(
+            "grafana\tgrafana/grafana:latest\nweb\tnginx:1\n"
+            "tsdb\tprom/prometheus:v2.53.0\n"
+            "dotinfra-monitoring-grafana-1\tgrafana/grafana:13.2.2\n",
+            "grafana-storage\ndotinfra-monitoring_grafana_data\n"
+            "0123abcd0123abcd0123abcd0123abcd0123abcd0123abcd0123abcd0123abcd\n")
+        self.assertEqual(found, ["grafana (container, grafana/grafana:latest)",
+                                 "tsdb (container, prom/prometheus:v2.53.0)",
+                                 "grafana-storage (volume)"])
+        self.assertEqual(run.call_count, 2)
+
+    def test_only_own_project_is_silent(self):
+        found, _ = self.run_docker("dotinfra-monitoring-prometheus-1\tprom/prometheus:v3\n",
+                                   "dotinfra-monitoring_prometheus_data\n")
+        self.assertEqual(found, [])
+
+    def test_never_fails(self):
+        with mock.patch("dotinfra.monitoring.shutil.which", return_value=None), \
+                mock.patch("dotinfra.monitoring.subprocess.run") as run:
+            self.assertEqual(monitoring.existing_stack(), [])
+            run.assert_not_called()
+        found, _ = self.run_docker("", "", returncode=1)  # daemon not reachable
+        self.assertEqual(found, [])
+        with mock.patch("dotinfra.monitoring.shutil.which", return_value="/usr/bin/docker"), \
+                mock.patch("dotinfra.monitoring.subprocess.run",
+                           side_effect=monitoring.subprocess.TimeoutExpired("docker", 5)):
+            self.assertEqual(monitoring.existing_stack(), [])
+        with mock.patch("dotinfra.monitoring.shutil.which", return_value="/usr/bin/docker"), \
+                mock.patch("dotinfra.monitoring.subprocess.run", side_effect=PermissionError):
+            self.assertEqual(monitoring.existing_stack(), [])
 
 
 if __name__ == "__main__":

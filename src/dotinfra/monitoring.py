@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -342,12 +344,74 @@ def _render_and_print(ctx, outdir: Path, force: bool) -> dict:
     jobs = ", ".join(f"{job}={n}" for job, n in report["jobs"].items()) or "none"
     print(f"  targets: {jobs}")
     print(f"  dashboard: {report['dashboard']}")
+    hint = adoption_hint(report["outdir"])
+    if hint:
+        print(hint, file=sys.stderr)
     env = report["outdir"] / ".env"
     print("next:")
     if not env.exists():
         print(f"  cd {report['outdir']} && cp .env.example .env   # set GRAFANA_ADMIN_PASSWORD")
     print(f"  cd {report['outdir']} && docker compose up -d")
     return report
+
+
+# ---------------------------------------------------------------- adopting a running stack
+
+COMPOSE_PROJECT = "dotinfra-monitoring"   # `name:` in the bundle's docker-compose.yml
+OVERRIDE_FILE = "docker-compose.override.yml"
+_STACK_NAME = re.compile(r"grafana|prometheus", re.IGNORECASE)
+
+
+def _docker_names(*args: str) -> list[str]:
+    """Output lines of ``docker ARGS``; ``[]`` without docker or on any failure."""
+    docker = shutil.which("docker")
+    if not docker:
+        return []
+    try:
+        result = subprocess.run([docker, *args], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def existing_stack() -> list[str]:
+    """Grafana/Prometheus containers and volumes that this bundle does not own.
+
+    ``["grafana (container, grafana/grafana:latest)", "grafana-storage (volume)"]``;
+    empty when docker is missing, unreachable, or only the bundle's own project exists.
+    Never raises.
+    """
+    found = []
+    for line in _docker_names("ps", "-a", "--format", "{{.Names}}\t{{.Image}}"):
+        name, _, image = line.partition("\t")
+        if (_STACK_NAME.search(name) or _STACK_NAME.search(image)) \
+                and not name.startswith(COMPOSE_PROJECT):
+            found.append(f"{name} (container, {image})" if image else f"{name} (container)")
+    for name in _docker_names("volume", "ls", "--format", "{{.Name}}"):
+        if _STACK_NAME.search(name) and not name.startswith(COMPOSE_PROJECT):
+            found.append(f"{name} (volume)")
+    return found
+
+
+def adoption_hint(outdir: Path) -> str | None:
+    """A warning for a machine that already runs Grafana/Prometheus outside this bundle.
+
+    Silent once ``docker-compose.override.yml`` exists in the bundle (adoption done).
+    """
+    if (Path(outdir) / OVERRIDE_FILE).exists():
+        return None
+    found = existing_stack()
+    if not found:
+        return None
+    return ("warning: docker already has Grafana/Prometheus containers or volumes that this "
+            f"bundle does not manage: {', '.join(found)}. Before `docker compose up -d`, read "
+            f"\"Adopting an existing stack\" in {Path(outdir) / 'README.md'}: set GRAFANA_IMAGE "
+            "in .env to at least the running version (`docker exec <grafana> grafana server "
+            "-v`), because an older Grafana can corrupt a newer database, and reuse the old "
+            f"volumes as `external:` in {OVERRIDE_FILE}. Keep the old stack stopped, not "
+            "removed, until the new one works.")
 
 
 def _cmd_where(args) -> int:

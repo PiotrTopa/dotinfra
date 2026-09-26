@@ -1,6 +1,6 @@
 ---
 name: infra-monitoring
-description: Monitoring for a dotinfra CMDB — Prometheus scrape targets generated from component `metrics:`, the Prometheus+Grafana+Pushgateway docker-compose bundle, the Fleet Overview Grafana dashboard, and the infra event log (Grafana annotations for outages, maintenance, changes, incidents, observations). Use when adding a host to monitoring, installing node_exporter or the NVIDIA DCGM exporter, (re)deploying the monitoring stack, when a dashboard shows a host down or missing, when checking CPU/RAM/GPU/temperature history, or right after an outage, maintenance window or notable change that should be recorded as an event.
+description: Monitoring for a dotinfra CMDB — Prometheus scrape targets generated from component `metrics:`, the Prometheus+Grafana+Pushgateway docker-compose bundle, the Fleet Overview Grafana dashboard, and the infra event log (Grafana annotations for outages, maintenance, changes, incidents, observations). Use when adding a host to monitoring, installing node_exporter or the NVIDIA DCGM exporter, (re)deploying the monitoring stack or adopting an already-running Grafana/Prometheus, when a dashboard shows a host down or missing, when checking CPU/RAM/GPU/temperature history, or right after an outage, maintenance window or notable change that should be recorded as an event.
 ---
 
 # Infra monitoring
@@ -72,6 +72,38 @@ cd ~/dotinfra-monitoring && cp -n .env.example .env
 dotinfra vault exec grafana_password -- sh -c 'IFS= read -r p; printf "GRAFANA_ADMIN_PASSWORD=%s\n" "$p" >> .env'  # from the vault
 chmod 600 .env && docker compose up -d     # add --profile node to monitor this host too
 ```
+
+### The host already runs Grafana or Prometheus (adopting)
+
+`render`/`setup-server` warn when docker has Grafana/Prometheus containers or
+volumes outside the bundle. Then, **before** `docker compose up -d` (details:
+"Adopting an existing stack" in the bundle's README.md):
+
+1. `docker exec <grafana> grafana server -v` and set `GRAFANA_IMAGE` in `.env`
+   to that exact version (never older: an older Grafana on a newer database can
+   corrupt it; upgrade later as its own step). Same idea for `PROMETHEUS_IMAGE`
+   (`prometheus --version`).
+2. `docker inspect` the old containers' mounts: Grafana data at
+   `/var/lib/grafana`, Prometheus TSDB at its `--storage.tsdb.path`.
+3. `docker stop` the old containers. Do **not** `docker rm` them or prune
+   volumes: they are the rollback.
+4. Prometheus data in an anonymous (64-hex) volume: with Prometheus stopped,
+   `docker volume create prometheus-history` and copy it over
+   (`docker run --rm -v <old>:/from:ro -v prometheus-history:/to alpine cp -a /from/. /to/`).
+5. Write `docker-compose.override.yml` in the bundle dir: top-level `volumes:`
+   `grafana_data` / `prometheus_data` with `external: true` and `name:` the old
+   (or copied) volume. `render` never touches that file, and it silences the warning.
+6. `docker compose up -d`, check `docker compose logs grafana` and
+   `dotinfra monitoring where --check`. Rollback: `docker compose down`, then
+   `docker start` the old containers.
+7. Record it: History line in `services/monitoring.md`, `dotinfra event add
+   --type change`, and ask the user before removing the old containers/volumes.
+
+The bundle provisions its datasource as "dotinfra Prometheus" (uid
+`dotinfra-prometheus`, not the default), so it coexists with an existing
+"Prometheus" datasource.
+
+### Re-rendering
 
 - Re-running `render` keeps locally edited template files (reported as "kept");
   `--force` resets them. Targets and dashboard are always regenerated.

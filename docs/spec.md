@@ -550,6 +550,12 @@ warning. Used by `grafana push`, `event`, `monitoring where` and `doctor`.
 `monitoring render` / `targets` warn that the stack runs on `<host>` unless
 `--output` or `--force` is given. `monitoring setup-server` writes `role = "server"`
 (and `--bundle-dir`) to `.dotinfra.local.toml`, renders the bundle and prints the
-`docker compose up -d` and `dotinfra timer install` steps. `monitoring where` prints
+`docker compose up -d` and `dotinfra timer install` steps. `monitoring render` and
+`setup-server` also warn (stderr, never an error) when `docker` is on PATH and lists
+containers (by name or image) or volumes named like `grafana`/`prometheus` outside the
+bundle's compose project `dotinfra-monitoring`, unless `<bundle_dir>/docker-compose.override.yml`
+exists: the warning points at "Adopting an existing stack" in the bundle README
+(pin `GRAFANA_IMAGE` ≥ the running version, reuse volumes as `external:` in the
+override). docker is asked with a 5 s timeout; any failure means no warning. `monitoring where` prints
 service, host, both URLs, this device's role and, with `--check`, whether
 `<grafana>/api/health` and `<prometheus>/-/ready` answer (3 s timeout).
