@@ -1,4 +1,4 @@
-"""Managed blocks, `dotinfra migrate` (0.1.x → 0.2) and its idempotence."""
+"""Managed blocks, `dotinfra migrate` (0.1.x → 0.2 → 0.3) and its idempotence."""
 
 import shutil
 import tomllib
@@ -13,7 +13,8 @@ from dotinfra.managed import (ADOPTED, CREATED, HASH, INSERTED, MD, UNCHANGED, U
                               find_block, refresh, wrap)
 from dotinfra.migrate import plan_migration
 from dotinfra.model import KINDS
-from dotinfra.scaffold import EXAMPLES, LEGACY
+from dotinfra.scaffold import EXAMPLES, LEGACY, SCHEMA
+from dotinfra.versioning import minor_floor
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "homelab-0.1.1"
 FIXTURE_FILES = {"README.md": "README.md", "AGENTS.md": "AGENTS.md", "CLAUDE.md": "CLAUDE.md",
@@ -124,8 +125,10 @@ class MigrateLegacyTest(MigrateTestCase):
         root = self.make_legacy()
         out = self.migrate(root)
         self.assertIn("schema 0 → 1", out)
+        self.assertIn("schema 1 → 2", out)
         data = self.toml(root)
-        self.assertEqual((data["cmdb"]["schema"], data["cmdb"]["min_version"]), (1, "0.2.0"))
+        self.assertEqual((data["cmdb"]["schema"], data["cmdb"]["min_version"]),
+                         (SCHEMA, minor_floor()))
         self.assertEqual(data["monitoring"]["service"], "monitoring")
         # the literal 0.1 localhost defaults no longer shadow the service component
         self.assertNotIn("grafana_url", data["monitoring"])
@@ -139,7 +142,7 @@ class MigrateLegacyTest(MigrateTestCase):
         readme = (root / "README.md").read_text()
         self.assertIn("## Start here — new machine", readme)
         self.assertIn("pipx install git+https://github.com/PiotrTopa/dotinfra", readme)
-        self.assertIn("dotinfra ≥ 0.2.0", readme)
+        self.assertIn(f"dotinfra ≥ {minor_floor()}", readme)
         self.assertIn("git clone <URL of this repository> ~/.infra", readme)
         self.assertIn(".dotinfra.local.toml", (root / ".gitignore").read_text())
         self.assertEqual(self.commits(root)[0], f"migrate: dotinfra {__version__}")
@@ -228,7 +231,7 @@ class MigrateLegacyTest(MigrateTestCase):
     def test_newer_schema_is_refused(self):
         root = self.make_legacy()
         self.migrate(root)
-        text = (root / ".dotinfra.toml").read_text().replace("schema = 1", "schema = 99")
+        text = (root / ".dotinfra.toml").read_text().replace(f"schema = {SCHEMA}", "schema = 99")
         (root / ".dotinfra.toml").write_text(text)
         out = self.migrate(root, expected=1)
         self.assertIn("schema 99", out)
@@ -237,6 +240,56 @@ class MigrateLegacyTest(MigrateTestCase):
         root = self.make_legacy()
         (root / ".git" / "MERGE_HEAD").write_text(git(root, "rev-parse", "HEAD"))
         self.assertIn("merge is in progress", self.migrate(root, expected=1))
+
+
+class MigrateSchema1Test(MigrateTestCase):
+    """0.2.x (schema 1) → 0.3 (schema 2): [events], [lint]; component bodies untouched."""
+
+    JOURNAL = ("---\nstatus: active\nrole: box\nupdated: 2026-09-01\n---\n\n# web1\n\n"
+               "## Overview\n\nweb box\n\n## History\n\n- 2026-09-01 — created\n")
+
+    def make_02(self, name: str = "v02") -> Path:
+        root = self.make_cmdb(name)
+        config = root / ".dotinfra.toml"
+        text = config.read_text()
+        text = text[:text.index("\n[events]")] + "\n"
+        config.write_text(text.replace(f"schema = {SCHEMA}", "schema = 1"))
+        self.write(root, "servers/web1.md", self.JOURNAL)
+        git(root, "add", "-A")
+        git(root, "commit", "-qm", "0.2 layout")
+        return root
+
+    def test_schema_1_to_2(self):
+        root = self.make_02()
+        self.assertNotIn("events", self.toml(root))
+        out = self.migrate(root)
+        self.assertIn("schema 1 → 2", out)
+        self.assertIn("dotinfra lint", out)
+        self.assertIn("journal", out)
+        data = self.toml(root)
+        self.assertEqual(data["cmdb"]["schema"], SCHEMA)
+        self.assertEqual(data["events"], {"backend": "auto"})
+        self.assertEqual(data["lint"], {"max_lines": 120})
+        self.assertEqual((root / "servers/web1.md").read_text(), self.JOURNAL)
+        self.assertEqual(self.commits(root)[0], f"migrate: dotinfra {__version__}")
+        self.assertEqual(git(root, "status", "--porcelain"), "")
+        # idempotent
+        snapshot = (root / ".dotinfra.toml").read_text()
+        self.assertIn("up to date", self.migrate(root))
+        self.assertEqual((root / ".dotinfra.toml").read_text(), snapshot)
+        self.assertFalse(plan_migration(root).changed)
+
+    def test_existing_sections_are_kept(self):
+        root = self.make_02("custom")
+        config = root / ".dotinfra.toml"
+        config.write_text(config.read_text() + '\n[events]\nbackend = "file"\n\n[lint]\n'
+                          "# mine\n")
+        git(root, "commit", "-qam", "custom")
+        self.migrate(root)
+        data = self.toml(root)
+        self.assertEqual(data["events"], {"backend": "file"})
+        self.assertEqual(data["lint"], {"max_lines": 120})
+        self.assertIn("# mine", config.read_text())
 
 
 class ReadmeVaultStepTest(MigrateTestCase):

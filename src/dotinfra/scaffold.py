@@ -26,7 +26,7 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = PACKAGE_DIR / "templates"
 EXAMPLES = PACKAGE_DIR / "examples"
 LEGACY = TEMPLATES / "legacy"   # renders of earlier releases, for `migrate` to recognise
-SCHEMA = 1                       # current CMDB schema (see migrate.MIGRATIONS)
+SCHEMA = 2                       # current CMDB schema (see migrate.MIGRATIONS)
 MANAGED_FILES = {  # file name in the CMDB -> template name; content lives in managed blocks
     "README.md": "README.md",
     "AGENTS.md": "AGENTS.md",

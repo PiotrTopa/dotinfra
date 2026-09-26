@@ -2,7 +2,8 @@
 
 1. Schema migrations: ``[cmdb] schema`` counts layout changes. ``MIGRATIONS[n]``
    turns schema ``n`` into ``n + 1`` by editing ``.dotinfra.toml`` text (comments
-   survive). 0.1.x CMDBs have no ``schema`` key, which means schema 0.
+   survive). 0.1.x CMDBs have no ``schema`` key, which means schema 0; 0.2.x
+   wrote schema 1; 0.3 is schema 2. Component files are never rewritten.
 2. ``[cmdb] min_version`` is raised to this release's ``X.Y.0`` (never lowered),
    so older dotinfra installs stop writing to a CMDB they do not understand.
 3. ``[sync] remote_url`` is filled from ``git remote get-url`` when empty.
@@ -61,8 +62,44 @@ def _schema_0_to_1(text: str, notes: list[str]) -> str:
     return text
 
 
+_EVENTS_BLOCK = """
+[events]
+backend = "auto"                 # "auto" | "grafana" | "file" (events/<YYYY>.md in the CMDB)
+"""
+_LINT_BLOCK = """
+[lint]
+max_lines = 120                  # warn when a component body is longer (docs are fact sheets)
+"""
+JOURNAL_NOTE = ("0.3: component docs now state current facts only; history goes to the "
+                "event log (`dotinfra event add`). Your docs were not changed: run "
+                "`dotinfra lint` and fix the `journal`/`long` warnings, or ask an agent to "
+                "do it with the infra-cmdb skill")
+
+
+def _append_block(text: str, block: str) -> str:
+    return text.rstrip("\n") + "\n" + block
+
+
+def _schema_1_to_2(text: str, notes: list[str]) -> str:
+    """0.2 → 0.3: the ``[events]`` backend and ``[lint] max_lines``. Component bodies
+    are never rewritten; the user is pointed at the new lint warnings instead."""
+    data = parse_toml(text)
+    text = set_toml_text(text, "cmdb", "schema", 2)
+    if "events" not in data:
+        text = _append_block(text, _EVENTS_BLOCK)
+    elif "backend" not in data["events"]:
+        text = set_toml_text(text, "events", "backend", "auto")
+    if "lint" not in data:
+        text = _append_block(text, _LINT_BLOCK)
+    elif "max_lines" not in data["lint"]:
+        text = set_toml_text(text, "lint", "max_lines", 120)
+    notes.append(JOURNAL_NOTE)
+    return text
+
+
 MIGRATIONS: dict[int, Callable[[str, list[str]], str]] = {
     0: _schema_0_to_1,
+    1: _schema_1_to_2,
 }
 assert sorted(MIGRATIONS) == list(range(SCHEMA)), "one migration per schema step"
 
