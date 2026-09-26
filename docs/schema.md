@@ -104,9 +104,11 @@ or reordering headings creates avoidable conflicts.
   `kind` not matching its folder;
 - `ssh.jump`, `depends_on` or `runs_on` pointing at an unknown id;
 - a malformed `metrics` entry;
-- secret-looking content anywhere in a tracked file: private key blocks,
-  `password: <value>`, AWS access keys, GitHub tokens, `sk-...` API keys, Slack
-  tokens. A line containing `dotinfra:allow-secret` is exempt.
+- an `address` or `ssh.*` value starting with `-` or containing whitespace or
+  control characters (it would become an ssh option or an ssh_config directive);
+- secret-looking content anywhere in a tracked file: private key blocks, age
+  identities, `password: <value>`, AWS access keys, GitHub tokens, `sk-...` API
+  keys, Slack tokens. A line containing `dotinfra:allow-secret` is exempt.
 
 Warnings: missing `role`; missing `updated` or older than 180 days; no H1;
 a key in `secrets` that the vault does not have (when the vault is readable);

@@ -24,9 +24,16 @@ server you control — and treat every device holding a clone as sensitive.
 - age identities (private keys) — outside the CMDB, in `~/.config/dotinfra/`.
 
 `dotinfra lint` fails on secret-looking content in any tracked file: private
-key blocks, `password: <value>`, AWS access key ids, GitHub tokens, `sk-...` keys,
-Slack tokens. Run it before every sync (agents do). It is a safety net, not a
-guarantee: it cannot recognise every credential format.
+key blocks, age identities, `password: <value>`, AWS access key ids, GitHub
+tokens, `sk-...` keys, Slack tokens. Run it before every sync (agents do). It is
+a safety net, not a guarantee: it cannot recognise every credential format.
+
+Component files are data that other devices' tools act on. `ssh-config` and
+`drift` refuse `address`/`ssh.*` values that could be read as an ssh option or
+smuggle a directive into `ssh_config` (a leading `-`, whitespace, control
+characters); lint reports them as `unsafe`. The merge driver runs as an
+ordinary `git merge-file` fallback on anything it cannot parse and never
+executes content from the files it merges.
 
 If a secret was committed and pushed, it is in the history of every clone and
 the hub. **Rotate it.** Rewriting history does not reach clones that already

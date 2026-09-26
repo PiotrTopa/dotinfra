@@ -131,7 +131,7 @@ reconciler (section 7) relies on H2 sections as merge units.
 
 ```
 src/dotinfra/
-  __init__.py        __version__ = "0.1.0"
+  __init__.py        __version__, DotinfraError
   __main__.py        python -m dotinfra
   cli.py             argparse entry point `main(argv=None) -> int`
   context.py         Context (root, config, components(), secret())
@@ -227,7 +227,7 @@ backend = "file"                # "file" | "age"
 path = "~/.config/dotinfra/vault.json"   # file backend (mode 0600, outside the repo)
 age_file = "vault.age"          # age backend: path relative to CMDB root (safe to commit)
 age_identity = "~/.config/dotinfra/age.key"
-age_recipients = []             # public keys; the identity's own key is added automatically
+age_recipients = []             # public keys of every device; `vault identity`/`migrate` add this device's
 
 [sync]
 remote = "origin"               # hub remote; "" = peers only
@@ -256,8 +256,9 @@ dotinfra ssh-config [--output FILE]      # Host blocks with ProxyJump from ssh.j
 dotinfra vault list|get KEY|set KEY|rm KEY|exec KEY -- CMD...
 dotinfra vault import FILE [--overwrite]           # flat JSON {key: secret}, e.g. legacy vaults
 dotinfra vault migrate --to age|file [--force] [--remove-plaintext]
+dotinfra vault identity                            # age: create this device's identity if missing, record + print public key
 dotinfra vault rekey                               # re-encrypt vault.age to current recipients
-dotinfra sync [--no-push] [--dry-run] [--message M]   # exit 0 ok, 1 remote failed, 2 conflict
+dotinfra sync [--no-push] [--dry-run] [--message M]   # exit 0 ok, 1 error/remote failed, 2 conflict
 dotinfra status                          # dirty files, ahead/behind per remote, conflicts
 dotinfra peer add NAME SSH_URL | peer ls | peer rm NAME
 dotinfra reconcile [--continue] [--abort]
@@ -267,13 +268,17 @@ dotinfra drift [ID...] [--update] [--json]
 dotinfra skills install [--target claude|agents|both] [--link]
 dotinfra doctor
 # lane B
-dotinfra monitoring targets [--output DIR]     # Prometheus file_sd JSON, one file per job
-dotinfra monitoring render [--output DIR]      # full bundle: compose + prometheus + grafana provisioning + targets + dashboard
-dotinfra grafana dashboard [--output FILE]     # fleet dashboard JSON
-dotinfra grafana push [--file FILE]            # upload via API (password from vault)
-dotinfra event add --host ID --type T [--time T] TEXT
-dotinfra event list [--host ID] [--type T] [--limit N]
+dotinfra monitoring targets [--output DIR] [--stdout]   # Prometheus file_sd JSON, one file per job
+dotinfra monitoring render [--output DIR] [--force]     # full bundle: compose + prometheus + grafana provisioning + targets + dashboard
+dotinfra grafana dashboard [--output FILE]              # fleet dashboard JSON
+dotinfra grafana push [--file FILE] [--folder TITLE] [--home]   # upload via API (credentials from vault)
+dotinfra event add --host ID --type T [--time T] [--end T] TEXT
+dotinfra event list [--host ID] [--type T] [--since T] [--limit N] [--json]
+dotinfra event rm ID
 ```
+
+Every command prints expected failures as `dotinfra: error: <message>` on stderr and
+exits 1; only bugs produce tracebacks.
 
 ## 7. Sync & reconciliation
 
@@ -308,7 +313,8 @@ Section-aware 3-way merge of one component file:
 - **Frontmatter**: per key 3-way. Changed on one side only → take it. Changed on
   both sides to the same value → take it. Both changed differently → for lists,
   union preserving order (ours first), minus items one side removed from the base;
-  for `updated`, max; for scalars/maps → conflict. Keys whose merged value equals
+  for `updated`, the later date (an emptied `updated` yields to the other side's);
+  for scalars/maps → conflict. Keys whose merged value equals
   ours keep ours' raw lines, so frontmatter comments survive.
 - **Body**: split into preamble + H2 sections (`## Heading`), keyed by heading text.
   Per section 3-way: one side changed → take it; both changed identically → take it;
@@ -318,10 +324,14 @@ Section-aware 3-way merge of one component file:
   continuation lines), de-duplicated, minus entries one side deleted, sorted
   newest-first by leading date (same day: entries new since the base first, undated
   entries last); a section deleted on one side and modified on the other → conflict;
-  headings inside code fences are not section boundaries; other both-changed sections → try a line-level
+  headings inside code fences are not section boundaries; other both-changed sections:
+  if both sides only *added* lines (no base line deleted or changed), keep every
+  addition, ours first where both added at the same spot; otherwise try a line-level
   `git merge-file` on just that section; if still conflicting → keep conflict markers
   inside that section only.
 - Exit 0 when clean (write result to OURS path), 1 when conflict markers remain.
+- Content the driver cannot handle (not valid UTF-8, an I/O error) falls back to
+  `git merge-file` on the whole file, so the driver never fails harder than git alone.
 
 **`dotinfra reconcile`**: shows remaining conflicts (exit 2 while any remain);
 `--continue` verifies no markers remain, runs lint (errors in the reconciled files
@@ -337,8 +347,11 @@ Docs reference keys only. Backends:
   compatible with a legacy flat JSON vault file via `vault import`.
 - **age**: the whole vault encrypted with `age` into `vault.age` inside the repo (so it
   syncs with the CMDB). Decrypt with `age_identity`; encrypt to identity + recipients.
-  Requires the `age` binary. Each device has its own identity, and adding a
-  device means adding its public key to `age_recipients` and re-encrypting (`vault rekey`).
+  Requires the `age` binary. Each device has its own identity; `vault identity`
+  creates it and records its public key in `age_recipients` (the full device set,
+  synced with the CMDB; `migrate` and `rekey` record this device's key too).
+  Adding a device: `vault identity` + sync there, `vault rekey` + sync on a device
+  that can decrypt, sync there again.
 
 `set` reads via `getpass` (never argv). `exec KEY -- CMD` pipes the secret +
 newline to CMD's stdin. `get` prints to stdout. Secrets are never logged.
@@ -347,11 +360,15 @@ newline to CMD's stdin. `get` prints to stdout. Secrets are never logged.
 
 Errors: frontmatter parse error; missing/invalid `status`; bad `id` format; duplicate
 id; `kind` mismatches folder; `ssh.jump`/`depends_on`/`runs_on` referencing an
-unknown id; malformed `metrics` entry; **secret-looking content** in any tracked file
-(`-----BEGIN .*PRIVATE KEY-----`, `password\s*[:=]\s*\S+` not followed by a vault
-reference — i.e. the rest of the line does not mention `vault` and the value is not a
-`<placeholder>` or `***` — AWS `AKIA[0-9A-Z]{16}`, `ghp_[A-Za-z0-9]{36}`, `sk-[A-Za-z0-9]{20,}`,
-`xox[baprs]-`), unless the line contains `dotinfra:allow-secret`.
+unknown id; malformed `metrics` entry; an `address` or `ssh.*` value that starts with
+`-` or contains whitespace/control characters (`unsafe`: it would become an ssh option
+or an ssh_config directive — `ssh-config` skips such components and `drift` refuses
+them); **secret-looking content** in any tracked file
+(`-----BEGIN .*PRIVATE KEY( BLOCK)?-----`, `AGE-SECRET-KEY-1...`,
+`password\s*[:=]\s*\S+` not followed by a vault reference — i.e. the rest of the line
+does not mention `vault` and the value is not a `<placeholder>` or `***` — AWS
+`AKIA[0-9A-Z]{16}`, GitHub `gh[pousr]_[A-Za-z0-9]{36,}` / `github_pat_...`,
+`sk-[A-Za-z0-9_-]{20,}`, `xox[baprs]-`), unless the line contains `dotinfra:allow-secret`.
 Warnings: missing `role`; missing `updated`, or older than 180 days (`stale`); no H1;
 secret key in `secrets` not present in the vault (only when the vault is readable); unknown keys (`--strict`).
 
@@ -365,7 +382,8 @@ drift (`os` drifts when a word of the documented value is missing from the probe
 OS name; `address` when it is an IPv4 literal not among the probed addresses; each
 recorded `facts.*` value that changed). `--update` writes `facts:` (hostname, kernel,
 arch, cpus, mem_gb, ips, probed) into frontmatter, replaces a drifted `os` with the
-probed name, and bumps `updated`; other lines and comments are left untouched.
+probed name, and bumps `updated`; other lines and comments are left untouched. `os` comparison tolerates
+point releases (`24.04` matches `24.04.1`).
 Results cached in `.dotinfra/state/facts/ID.json`. Without IDs, every component with
 `ssh:` whose status is neither `planned` nor `retired` is probed. Exit 1 if anything
 drifted or was unreachable.

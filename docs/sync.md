@@ -62,8 +62,9 @@ always-on machines. You can combine both: a hub plus peers on the LAN.
    devices' history is kept and the merge driver runs). Fast-forward when possible.
 4. On conflicts the merge driver could not resolve: stop, leave the repo mid-merge,
    write `.dotinfra/state/RECONCILE.md`, exit with code **2**.
-5. Otherwise push `main` to the hub (skip with `--no-push`).
-6. Regenerate `INDEX.md` if stale and commit it as `index: regenerate`.
+5. Regenerate `INDEX.md` if stale and commit it as `index: regenerate`.
+6. Push `main` to the hub (skip with `--no-push`). A failed fetch or push is
+   reported and gives exit code 1.
 
 It is idempotent and takes a lock (`.dotinfra/state/sync.lock`, stale after
 10 minutes), so running it from a timer and by hand at the same time is safe.
@@ -90,9 +91,10 @@ ancestor (*base*), this device's version (*ours*) and the other device's (*their
 - deleted on one side and untouched on the other → delete;
 - `History` / `Changelog` / `Log` sections → union of the bullet lines,
   de-duplicated, sorted newest first;
-- other sections changed on both sides → a line-level merge of just that
-  section; if that still conflicts, conflict markers appear **inside that
-  section only**.
+- other sections changed on both sides: if both sides only *added* lines (two
+  devices each appending a `Known issues` bullet), both additions are kept,
+  ours first; otherwise a line-level merge of just that section, and if that
+  still conflicts, conflict markers appear **inside that section only**.
 
 ### Worked example
 

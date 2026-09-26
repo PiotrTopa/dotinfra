@@ -76,30 +76,36 @@ flowchart LR
     prom --> hosts
 ```
 
-## Five-minute quickstart
+## Quickstart: two machines in ten minutes
 
 ```sh
 # 1. install (Python 3.11+, git)
 pipx install git+https://github.com/PiotrTopa/dotinfra      # or: curl -fsSL https://raw.githubusercontent.com/PiotrTopa/dotinfra/main/install.sh | sh
 
 # 2. create the CMDB in ~/.infra (git repo, AGENTS.md, CLAUDE.md, folders)
-dotinfra init --name home
+#    and install the Agent Skills into ~/.claude/skills and ~/.agents/skills
+dotinfra init --name home --skills both
 
-# 3. teach your agents the workflow (~/.claude/skills and/or ~/.agents/skills)
-dotinfra skills install
-
-# 4. first component
+# 3. first component: create from the template, then fill in the facts
 dotinfra new server nas --title "nas — storage" --address 10.10.0.10
-$EDITOR ~/.infra/servers/nas.md        # set status: active, role, ssh, ...
+$EDITOR ~/.infra/servers/nas.md        # status: active, role, ssh user, ...
 dotinfra lint && dotinfra index
 
-# 5. sync to a second device through a private hub repo
-git -C ~/.infra remote add origin git@github.com:alice/infra.git   # PRIVATE repo
-dotinfra sync
-#    ...on the second device:
-git clone git@github.com:alice/infra.git ~/.infra && dotinfra sync
-dotinfra timer install --interval 15m   # optional: background sync on each device
+# 4. share it through a PRIVATE hub repo (GitHub/Gitea, or a bare repo on any SSH host)
+git -C ~/.infra remote add origin git@github.com:alice/infra.git
+dotinfra sync                          # commit, push
+
+# 5. on the second machine: install (step 1), then
+git clone git@github.com:alice/infra.git ~/.infra
+dotinfra sync && dotinfra skills install   # registers the merge driver, installs the skills
+dotinfra timer install --interval 15m      # optional, on every machine: background sync
 ```
+
+From now on `dotinfra sync` (or the timer) keeps both copies current; edits to
+the same file on both sides are merged section by section. `dotinfra doctor`
+tells you if anything is missing. Secrets: `dotinfra vault set nas_sudo` on
+one machine, then [share the vault](docs/vault.md) with the other (`age`
+backend: `dotinfra vault identity` there, `dotinfra vault rekey` here).
 
 Prefer to let an agent do it? After installing, ask it: *"Use the infra-onboard
 skill to set up my infrastructure CMDB."* It interviews you, discovers hosts from
@@ -119,7 +125,7 @@ fictional [example CMDB](src/dotinfra/examples/homelab/).
 | `dotinfra lint` | schema, broken references, stale docs, **leaked secrets** |
 | `dotinfra index` | regenerate `INDEX.md` |
 | `dotinfra ssh-config` | `Host` blocks with `ProxyJump` from `ssh.jump` |
-| `dotinfra vault ...` | `set`, `get`, `exec KEY -- CMD`, `import` legacy JSON, `migrate --to age` |
+| `dotinfra vault ...` | `set`, `get`, `exec KEY -- CMD`, `import` legacy JSON, `migrate --to age`, `identity`, `rekey` |
 | `dotinfra sync` / `status` | commit, fetch, merge, push; ahead/behind/conflicts |
 | `dotinfra peer add NAME URL` | direct device-to-device sync without a hub |
 | `dotinfra reconcile` | finish or abort a merge the driver couldn't fully resolve |

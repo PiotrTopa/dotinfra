@@ -35,12 +35,11 @@ Ask, and accept short answers:
 ## 2. Initialise
 
 ```sh
-dotinfra init --name NAME            # creates ~/.infra with git, AGENTS.md, templates
-dotinfra skills install              # makes these skills available to agents
+dotinfra init --name NAME --skills both   # ~/.infra with git, AGENTS.md, templates; skills into ~/.claude and ~/.agents
 ```
 
-`init` also wires `CLAUDE.md` (`@AGENTS.md`) so Claude Code, Codex and other
-agents pick up the rules automatically.
+`init` writes `AGENTS.md` (the rules) and `CLAUDE.md` (`@AGENTS.md`), so Claude
+Code, Codex and other agents pick them up whenever they work inside the CMDB.
 
 ## 3. Discover (read-only, no changes to any host)
 
@@ -77,7 +76,7 @@ domains the user owns in `domains/`. Prefer fewer, accurate files over many gues
 ## 5. Probe (with consent)
 
 ```sh
-dotinfra ssh-config --output ~/.ssh/config.d/dotinfra   # then ensure ~/.ssh/config has: Include config.d/*
+dotinfra ssh-config --output ~/.ssh/config.d/dotinfra   # then add to ~/.ssh/config: Include ~/.ssh/config.d/dotinfra
 dotinfra drift --update                                  # ssh to each host, record OS/kernel/CPU/RAM/IPs
 ```
 
@@ -104,7 +103,8 @@ Fix every error. Warnings about missing `role`/`updated` are worth fixing now.
 ## 8. Sync to other devices (if requested)
 
 - Hub: create a **private** repo, `git -C ~/.infra remote add origin URL`,
-  `dotinfra sync`. On each other device: `git clone URL ~/.infra && dotinfra sync`.
+  `dotinfra sync`. On each other device: install dotinfra,
+  `git clone URL ~/.infra && dotinfra sync && dotinfra skills install`.
 - Peers without a hub: `dotinfra peer add laptop ssh://laptop/~/.infra` on each side.
 - Background sync: `dotinfra timer install --interval 15m` on each device.
 - Vault on other devices: see `infra-vault` (age backend syncs; file backend is copied out of band).

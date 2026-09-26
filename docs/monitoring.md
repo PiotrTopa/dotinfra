@@ -38,8 +38,9 @@ file per job — `node.json`, `dcgm.json`, ... :
 - `role` is `fleet` for components tagged `fleet`, otherwise `infra`. The
   dashboard shows one row per fleet host.
 - `instance` is rewritten to `<id>:<port>`, so graphs show names, not IPs.
-- Files for jobs that no longer exist are removed. Hand-written files named
-  `custom-*.json` in the same directory are left alone.
+- Files for jobs that no longer exist are removed — but only files shaped like
+  dotinfra's own output; hand-written `custom-*.json` files and unrelated JSON
+  in the same directory are left alone.
 
 Files are replaced atomically and Prometheus re-reads them every minute: adding,
 retiring or re-addressing a host never needs a restart.

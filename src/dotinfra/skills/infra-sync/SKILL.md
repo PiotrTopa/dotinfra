@@ -49,8 +49,9 @@ or by deleting and re-cloning — each silently discards another device's edits.
    - Frontmatter scalar conflicts (`status`, `address`, `os`, `role`) follow the
      same rule. Lists are already unioned by the driver; drop entries that are
      no longer true.
-   - `## History` is merged automatically (union, newest first). If markers
-     remain there, keep every dated line from both sides; never drop history.
+   - `## History` is merged automatically (union, newest first), and so are
+     sections where both sides only added lines. If markers remain in History,
+     keep every dated line from both sides; never drop history.
 4. Remove all markers. Keep frontmatter valid (the YAML subset; see `infra-cmdb`).
    Set `updated:` to today on files where you changed facts.
 5. Finish:
@@ -76,9 +77,10 @@ secret changed on the other device and run `dotinfra vault rekey`.
   pushes into them; each peer pulls for itself.
 - Automatic: `dotinfra timer install --interval 15m` (systemd user timer; prints
   a cron line where systemd is unavailable). `dotinfra timer remove` undoes it.
-- New device checklist: clone, `dotinfra doctor`, copy or re-key the vault
-  (`infra-vault` skill), then `dotinfra sync` (it registers the merge driver in
-  the clone's git config; plain `git pull` would not use it).
+- New device checklist: `git clone <hub> ~/.infra`, `dotinfra sync` (registers
+  the merge driver in the clone's git config; plain `git pull` would not use it),
+  `dotinfra skills install`, `dotinfra doctor`, then give it the vault: copy the
+  file vault out of band, or `dotinfra vault identity` + re-key (`infra-vault` skill).
 
 ## Migrating copies that were kept in sync with rsync/scp
 

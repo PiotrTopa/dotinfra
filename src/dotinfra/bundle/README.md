@@ -52,7 +52,8 @@ Keep targets current after CMDB edits, e.g. from cron on the monitoring host:
 ```
 
 Hand-written extra targets go in `targets/custom-*.json`; dotinfra never touches
-those. Any other stale `*.json` file in `targets/` is removed.
+those. Stale `*.json` files that dotinfra itself generated (jobs that no longer
+exist) are removed; other JSON files are left alone.
 
 ## Re-rendering
 
