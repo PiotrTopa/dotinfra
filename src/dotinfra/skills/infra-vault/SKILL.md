@@ -52,7 +52,18 @@ Key naming: `<component-id>_<purpose>` — `nas_sudo`, `router_admin`,
 ## Lint found a secret
 
 `dotinfra lint` flags private key blocks, age identities, `password: <value>`,
-AWS/GitHub/OpenAI-style tokens and Slack tokens in tracked files.
+AWS/GitHub/OpenAI-style tokens and Slack tokens in tracked files. It also flags
+a quoted or backticked value right after a credential word, the way notes are
+usually written in Markdown: `Pass: <value>`, `Password <value>`, `password set
+to <value>`, `PIN is <value>` with the value in backticks or quotes (words:
+pass, passwd, password, pwd, passphrase, pin, token, secret, api key; pin,
+pass, token, secret and api key only with `:`, `=`, `is` or `set to`). Not
+flagged: `passwordless sudo`, `password auth disabled`, `PasswordAuthentication
+no`, lines that mention the vault (`Password in vault (<key>)`, `dotinfra
+vault exec <key> -- ...`), placeholders (`<password>`, `***`, `{{ var }}`),
+paths (values starting with `~`, `/`, `./` or `$`) and ALL_CAPS variable names.
+Write a vault reference instead of the value, e.g. "alice: sudo password in
+the vault, key `host_sudo`".
 
 1. Move the value into the vault (`dotinfra vault set KEY`, user runs it).
 2. Replace it in the file with the key name.

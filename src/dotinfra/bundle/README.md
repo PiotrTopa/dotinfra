@@ -122,4 +122,4 @@ echo "backup_last_success_timestamp_seconds $(date +%s)" |
 - Ports 9090/9091/3000 are published on all interfaces. Bind them to a LAN or
   WireGuard address (`"10.99.0.1:3000:3000"`) or firewall them; Prometheus and
   Pushgateway have no authentication.
-- `.env` holds the Grafana admin password: keep it `chmod 600` and out of git.
+- `.env` holds the Grafana admin password, so keep it `chmod 600` and out of git.

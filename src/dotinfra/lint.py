@@ -24,12 +24,37 @@ MAX_SCAN_BYTES = 1_000_000
 SECRET_PATTERNS = [
     ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----")),
     ("age identity", re.compile(r"AGE-SECRET-KEY-1[0-9A-Z]{50,}")),
-    ("password", re.compile(r"password\s*[:=]\s*\S+", re.IGNORECASE)),
     ("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
     ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}")),
     ("API secret key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
     ("Slack token", re.compile(r"xox[baprs]-")),
 ]
+# "password" + `:`/`=` + an unquoted value; the rest of the line is checked for a reference.
+PASSWORD_ASSIGNMENT = re.compile(r"password\s*[:=]\s*\S+", re.IGNORECASE)
+# A quoted or backticked value right after a credential word, as people write it in
+# Markdown: "Pass: `...`", "Password `...`", "password set to `...`", "PIN is '...'".
+# Strong words may be followed by the value directly; weak ones ("pass", "pin", "token",
+# "secret", "api key") are also everyday verbs and nouns, so they need `:`, `=`, `is` or
+# `set to` in between (a strong word alone needs whitespace before the value). The word
+# must not be part of a longer word or name (passwordless, PasswordAuthentication,
+# `grafana_password`) or itself quoted (the `password` field);
+# JSON-style quoted keys ("password": "...", "api_token": "...") are matched separately.
+_STRONG_WORDS = r"pass(?:word|wd|phrase)|pwd"
+_WEAK_WORDS = r"pass|pin|token|secret|api[ _-]?key"
+_SEPARATOR = r"\s*\**\s*(?:[:=]|\bis\b|\bset\s+to\b)\s*\**\s*"
+_QUOTED_VALUE = r"(?:`([^`\n]{1,200})`|\"([^\"\n]{1,200})\"|'([^'\n]{1,200})')"
+CREDENTIAL_NOTATIONS = (
+    re.compile(rf"(?<![\w`\"'])(?:(?:{_STRONG_WORDS})\b(?:{_SEPARATOR}|(?:\s*\*\*)?\s+)"
+               rf"|(?:{_WEAK_WORDS})\b{_SEPARATOR}){_QUOTED_VALUE}", re.IGNORECASE),
+    re.compile(rf"[\"'][\w-]*(?:{_STRONG_WORDS}|{_WEAK_WORDS})[\"']\s*[:=]\s*{_QUOTED_VALUE}",
+               re.IGNORECASE),
+)
+# Values that point somewhere instead of being the secret: placeholders (<password>,
+# ***, {{ var }}), paths (~/..., /..., ./...) and variables ($VAR, ALL_CAPS_NAME).
+_PLACEHOLDER_RE = re.compile(r"[*.xX•…_-]+")
+_ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+")
+_REFERENCE_PREFIXES = ("<", "{{", "$", "%", "~", "/", "./", "../")
+_QUOTED_SPAN_RE = re.compile(r"`([^`\n]+)`|\"([^\"\n]+)\"|'([^'\n]+)'")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _H1_RE = re.compile(r"^# \S", re.MULTILINE)
 
@@ -171,11 +196,41 @@ def scanned_files(root: Path) -> list[Path]:
                   and not {".git", ".dotinfra"} & set(p.relative_to(root).parts))
 
 
-def _looks_referenced(line: str, match: re.Match) -> bool:
-    """A password line is fine when it points at the vault or is a placeholder."""
-    rest = line[match.start():].lower()
-    value = re.split(r"[:=]", match.group(0), maxsplit=1)[1].strip().strip("`'\"")
-    return "vault" in rest or value.startswith(("<", "***", "{{"))
+def is_reference_value(value: str) -> bool:
+    """True for a value that names where a secret is instead of being one."""
+    value = value.strip().strip("`'\"").strip()
+    return (not value or value.startswith(_REFERENCE_PREFIXES)
+            or bool(_PLACEHOLDER_RE.fullmatch(value)) or bool(_ENV_NAME_RE.fullmatch(value)))
+
+
+def _points_elsewhere(rest: str) -> bool:
+    """The text after a credential word mentions the vault or quotes a path/placeholder."""
+    if "vault" in rest.lower():
+        return True
+    return any(is_reference_value(next(filter(None, span.groups())))
+               for span in _QUOTED_SPAN_RE.finditer(rest))
+
+
+def secret_labels(line: str) -> list[str]:
+    """What kinds of secret-looking content one line holds (``[]`` when none).
+
+    ``dotinfra:allow-secret`` is not handled here; :func:`scan_secrets` skips such lines.
+    """
+    labels = [label for label, pattern in SECRET_PATTERNS if pattern.search(line)]
+    match = PASSWORD_ASSIGNMENT.search(line)
+    if match:
+        value = re.split(r"[:=]", match.group(0), maxsplit=1)[1]
+        if not (is_reference_value(value) or _points_elsewhere(line[match.start():])):
+            labels.append("password")
+    if "password" not in labels:
+        for pattern in CREDENTIAL_NOTATIONS:
+            found = [m for m in pattern.finditer(line)
+                     if not is_reference_value(next(filter(None, m.groups())))
+                     and "vault" not in line[m.start():].lower()]
+            if found:
+                labels.append("password")
+                break
+    return labels
 
 
 def scan_secrets(root: Path) -> list[Issue]:
@@ -190,12 +245,10 @@ def scan_secrets(root: Path) -> list[Issue]:
         for number, line in enumerate(data.decode("utf-8", errors="replace").splitlines(), 1):
             if ALLOW_MARKER in line:
                 continue
-            for label, pattern in SECRET_PATTERNS:
-                match = pattern.search(line)
-                if match and not (label == "password" and _looks_referenced(line, match)):
-                    issues.append(Issue("error", rel, number,
-                                        f"possible {label} in plain text; move it to the vault "
-                                        f"(or mark the line `{ALLOW_MARKER}`)", "secret"))
+            for label in secret_labels(line):
+                issues.append(Issue("error", rel, number,
+                                    f"possible {label} in plain text; move it to the vault "
+                                    f"(or mark the line `{ALLOW_MARKER}`)", "secret"))
     return issues
 
 

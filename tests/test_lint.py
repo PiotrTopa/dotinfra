@@ -135,6 +135,82 @@ class SecretScanTest(LintTestCase):
                          [("leak.txt", "secret")])
 
 
+class CredentialNotationTest(unittest.TestCase):
+    """Markdown ways of writing a credential next to a quoted value (made-up values only)."""
+
+    FLAGGED = [
+        "- UID: 1000, Pass: `Wq7-plover`",
+        "- `bob`: Password `m4ple!leaf`, passwordless sudo",
+        "User account password set to `Qx9#tundra`.",
+        'password: "Rk2 lantern"',
+        "The admin password is `zephyr-81`",
+        "PASSWD='c0bble5tone'",
+        "Wi-Fi passphrase: `amber otter meadow`",
+        "pwd = 'Lk88swift'",
+        "SIM PIN: `4827`",
+        "API key: `ak_live_91fz0q`",
+        'api_key = "9f3c1a7b"',
+        "Token: `t0k-e9x2`",
+        'Secret = "orchid-72"',
+        "**Password:** `Vr5-quill`",
+        '{"password": "n1mbus-cloud"}',
+        "db_password: 'p4ssage-home'",
+        "Login: alice / pass is `h0llow-reed`",
+        "`mysql -u root --password 'k3strel'`",
+        "Pass = `q2w-lynx`",
+        '"auth_token": "f00d-cafe-77"',
+        "router PIN is '9031'",
+        "password `it's-a-trap`",
+    ]
+    ALLOWED = [
+        "- `bob`: passwordless sudo",
+        "SSH password auth disabled",
+        "Password in vault (`nas_sudo`)",
+        "run it with keyvault exec nas_sudo -- sudo -S true",
+        "`dotinfra vault exec nas_sudo -- sudo -S true`",
+        "password: `<password>`",
+        "Password: `***`",
+        "PasswordAuthentication no",
+        "Password: from `~/x/secrets.yaml`",
+        "Token: `$GRAFANA_TOKEN`",
+        "passphrase: `/etc/ssl/private/site.pass`",
+        "Password: `./secrets/db.txt`",
+        "pin `GRAFANA_IMAGE` to the running version",
+        "Pass `--force` to overwrite",
+        "the `password` field of the form is required",
+        'grafana_password_key = "grafana_password"',
+        "Secret: `{{ db_secret }}`",
+        "API key: `WEATHER_API_KEY` (from the environment)",
+        "token: `...`",
+        "Rotate the secret quarterly.",
+        "password: <see vault>",
+        "Pinned `grafana/grafana` to a newer tag",
+        "tokens: [`a`, `b`]",
+        "sudo password: vault key `a_sudo`",
+        "Password = ***",
+        'GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set it in .env}',
+    ]
+
+    def test_flagged(self):
+        from dotinfra.lint import secret_labels
+
+        for line in self.FLAGGED:
+            with self.subTest(line=line):
+                self.assertEqual(secret_labels(line), ["password"])
+
+    def test_allowed(self):
+        from dotinfra.lint import secret_labels
+
+        for line in self.ALLOWED:
+            with self.subTest(line=line):
+                self.assertEqual(secret_labels(line), [])
+
+    def test_reported_once_per_line(self):
+        from dotinfra.lint import secret_labels
+
+        self.assertEqual(secret_labels("password: `Vr5-quill` and PIN: `4827`"), ["password"])
+
+
 class WarningRulesTest(LintTestCase):
     def test_warnings(self):
         self.add("servers/norole.md", "status: active\nupdated: 2026-09-01")

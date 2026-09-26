@@ -416,12 +416,30 @@ id; `kind` mismatches folder; `ssh.jump`/`depends_on`/`runs_on` referencing an
 unknown id; malformed `metrics` entry; an `address` or `ssh.*` value that starts with
 `-` or contains whitespace/control characters (`unsafe`: it would become an ssh option
 or an ssh_config directive — `ssh-config` skips such components and `drift` refuses
-them); **secret-looking content** in any tracked file
-(`-----BEGIN .*PRIVATE KEY( BLOCK)?-----`, `AGE-SECRET-KEY-1...`,
-`password\s*[:=]\s*\S+` not followed by a vault reference — i.e. the rest of the line
-does not mention `vault` and the value is not a `<placeholder>` or `***` — AWS
-`AKIA[0-9A-Z]{16}`, GitHub `gh[pousr]_[A-Za-z0-9]{36,}` / `github_pat_...`,
-`sk-[A-Za-z0-9_-]{20,}`, `xox[baprs]-`), unless the line contains `dotinfra:allow-secret`.
+them); **secret-looking content** in any tracked file, unless the line contains
+`dotinfra:allow-secret` (at most one password error per line):
+
+- `-----BEGIN .*PRIVATE KEY( BLOCK)?-----`, `AGE-SECRET-KEY-1...`, AWS
+  `AKIA[0-9A-Z]{16}`, GitHub `gh[pousr]_[A-Za-z0-9]{36,}` / `github_pat_...`,
+  `sk-[A-Za-z0-9_-]{20,}`, `xox[baprs]-`;
+- `password\s*[:=]\s*\S+`, unless the value is a reference value or the rest of the
+  line mentions `vault` or quotes a reference value, such as a quoted `~/...` path;
+- **credential notation**: a backticked or quoted value directly after a credential
+  word — `pass`, `passwd`, `password`, `pwd`, `passphrase`, `pin`, `token`, `secret`,
+  `api key` (also `api_key`/`api-key`), case-insensitive, a whole word not preceded by
+  a word character or a quote (so not `passwordless`, `PasswordAuthentication`,
+  `grafana_password`, or a quoted `password` field name), optionally in `**bold**` —
+  with `:`, `=`, `is` or `set to` in between. The separator is optional after
+  `password`, `passwd`, `passphrase` and `pwd` (then whitespace is required) and
+  required after the other words, which are everyday verbs and nouns ("pin X to",
+  "pass --force"). JSON-style quoted keys (`"password": "..."`, `"api_token": "..."`)
+  count too. Skipped when the value is a reference value or the rest of the line
+  mentions `vault`.
+
+A **reference value** is empty, a placeholder (starts with `<` or `{{`, or consists
+only of `*`, `.`, `x`, `_`, `-`, `…`), a path or variable (starts with `~`, `/`, `./`,
+`../`, `$`, `%`) or an `ALL_CAPS_NAME` containing an underscore.
+
 Warnings: missing `role`; missing `updated`, or older than 180 days (`stale`); no H1;
 secret key in `secrets` not present in the vault (only when the vault is readable); unknown keys (`--strict`).
 

@@ -24,9 +24,12 @@ server you control — and treat every device holding a clone as sensitive.
 - age identities (private keys) — outside the CMDB, in `~/.config/dotinfra/`.
 
 `dotinfra lint` fails on secret-looking content in any tracked file: private
-key blocks, age identities, `password: <value>`, AWS access key ids, GitHub
-tokens, `sk-...` keys, Slack tokens. Run it before every sync (agents do). It is
-a safety net, not a guarantee: it cannot recognise every credential format.
+key blocks, age identities, `password: <value>`, a quoted or backticked value
+right after a credential word (Markdown notes such as `Pass: <value>`,
+`Password <value>`, `password set to <value>`, `PIN is <value>`; see
+[spec §9](spec.md#9-lint-rules)), AWS access key ids, GitHub tokens, `sk-...`
+keys, Slack tokens. Run it before every sync (agents do). It is a safety net,
+not a guarantee: it cannot recognise every credential format.
 
 Component files are data that other devices' tools act on. `ssh-config` and
 `drift` refuse `address`/`ssh.*` values that could be read as an ssh option or
