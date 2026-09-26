@@ -11,7 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import DotinfraError, __version__, drift, index, lint, scaffold, skills, sshconfig, sync
+from . import (DotinfraError, __version__, drift, index, lint, migrate, scaffold, skills,
+               sshconfig, sync, upgrade, versioning)
 from . import vault as vault_module
 from .config import CONFIG_NAME, load_config
 from .context import get_context
@@ -96,9 +97,81 @@ def _doctor_tools(results) -> None:
                    "not found" + ("" if required else " (only needed for the age vault)"))
 
 
+def _doctor_version(args, results, config) -> None:
+    installed = versioning.installed_version()
+    required = config.get("cmdb", "min_version") if config else None
+    if required and versioning.is_newer(str(required)):
+        _check(results, "fail", "version", versioning.too_old_message(str(required)))
+    else:
+        _check(results, "ok", "version", f"dotinfra {installed}"
+               + (f" (CMDB needs ≥ {required})" if required else ""))
+    if getattr(args, "check_updates", False):
+        latest = upgrade.latest_release()
+        if latest is None:
+            _check(results, "info", "updates", "could not reach GitHub (offline?)")
+        elif versioning.is_newer(latest, installed):
+            _check(results, "warn", "updates", f"{latest} is available; run `dotinfra upgrade`")
+        else:
+            _check(results, "ok", "updates", f"up to date (latest release {latest})")
+
+
+def _doctor_migrate(root: Path, results) -> None:
+    try:
+        plan = migrate.plan_migration(root)
+    except DotinfraError as exc:
+        _check(results, "fail", "migrate", str(exc))
+        return
+    if plan.changed:
+        _check(results, "warn", "migrate", f"{len(plan.lines)} pending change(s) "
+                                           "(managed files, schema, skills); run "
+                                           "`dotinfra migrate --dry-run` to see them")
+    else:
+        _check(results, "ok", "migrate", "schema, managed files and project skills current")
+
+
+def _skill_rows(pairs, scope_label: str, results) -> None:
+    """One row per directory; agents sharing a directory are listed together."""
+    by_dir: dict[Path, list[str]] = {}
+    for name, directory in pairs:
+        by_dir.setdefault(directory, []).append(name)
+    for directory, names in by_dir.items():
+        state = skills.skills_state(directory)
+        level = {"current": "ok", "missing": "info"}.get(state, "warn")
+        hint = "" if state == "current" else (" — `dotinfra migrate`" if scope_label
+                                              else " — `dotinfra skills install`")
+        _check(results, level, "skills", f"{state}: {directory} ({', '.join(names)}"
+                                         f"{scope_label}){hint}")
+
+
+def _doctor_skills(config, results) -> None:
+    home = Path.home()
+    wanted = set(skills.detect_targets(home)) | set(skills.read_record(home).get("targets", []))
+    _skill_rows([(name, d) for name in skills.TARGETS if name in wanted
+                 for d in skills.target_dirs([name], skills.USER, home=home)], "", results)
+    if config is not None:
+        _skill_rows([(name, d) for name in skills.project_targets(config)
+                     for d in skills.target_dirs([name], skills.PROJECT, root=config.root)],
+                    "; project scope", results)
+
+
+def _doctor_monitoring(ctx, results) -> None:
+    try:
+        from .monitoring import device_role, monitoring_endpoints
+
+        grafana, _, host = monitoring_endpoints(ctx, warn=False)
+        role = device_role(ctx)
+    except Exception as exc:  # optional module; never break doctor
+        _check(results, "warn", "monitoring", str(exc))
+        return
+    _check(results, "ok" if host else "info", "monitoring",
+           f"this device: {role}; host: {host or 'unknown'}; grafana {grafana}")
+
+
 def _doctor_cmdb(args, results) -> None:
     ctx = get_context(args, require=False)
     if not (ctx.root / CONFIG_NAME).is_file():
+        _doctor_version(args, results, None)
+        _doctor_skills(None, results)
         _check(results, "fail", "cmdb", f"no {CONFIG_NAME} in {ctx.root}; run `dotinfra init`")
         return
     try:
@@ -106,7 +179,11 @@ def _doctor_cmdb(args, results) -> None:
     except DotinfraError as exc:
         _check(results, "fail", "config", str(exc))
         return
+    _doctor_version(args, results, config)
     _check(results, "ok", "cmdb", f"{ctx.root} (name {config.get('cmdb', 'name')!r})")
+    _doctor_migrate(ctx.root, results)
+    _doctor_skills(config, results)
+    _doctor_monitoring(ctx, results)
     _doctor_git(ctx.root, results)
     try:
         keys = vault_module.open_vault(config).keys()
@@ -161,13 +238,13 @@ def _register_browse(sub) -> None:
     p.add_argument("--tag", help="only components with this tag")
     p.add_argument("--status", help="active, planned, degraded or retired")
     p.add_argument("--json", action="store_true", help="machine-readable output")
-    p.set_defaults(func=cmd_ls)
+    p.set_defaults(func=cmd_ls, version_guard="warn")
 
     p = sub.add_parser("show", help="print one component",
                        description="Print a component file (or its parsed data with --json).")
     p.add_argument("id", metavar="ID")
     p.add_argument("--json", action="store_true", help="parsed frontmatter and body as JSON")
-    p.set_defaults(func=cmd_show)
+    p.set_defaults(func=cmd_show, version_guard="warn")
 
 
 def _register_merge_driver(sub) -> None:
@@ -181,9 +258,14 @@ def _register_merge_driver(sub) -> None:
 
 
 def _register_doctor(sub) -> None:
-    sub.add_parser("doctor", help="check the installation and the CMDB",
-                   description="Check python, git, ssh, age, config, merge driver, vault "
-                               "and lint.").set_defaults(func=cmd_doctor)
+    p = sub.add_parser("doctor", help="check the installation and the CMDB",
+                       description="Check python, git, ssh, age, the dotinfra version against "
+                                   "the CMDB's min_version, pending migrations, Agent Skills "
+                                   "per agent, the monitoring role, config, merge driver, "
+                                   "vault and lint. Offline unless --check-updates.")
+    p.add_argument("--check-updates", action="store_true",
+                   help="also ask GitHub whether a newer dotinfra release exists")
+    p.set_defaults(func=cmd_doctor, version_guard="off")
 
 
 def _register_optional(sub, module: str, name: str, help_text: str) -> None:
@@ -209,8 +291,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dotinfra",
         description="A self-maintaining Markdown infrastructure CMDB for humans and AI agents.",
-        epilog="Run `dotinfra COMMAND --help` for details. Docs: "
-               "https://github.com/PiotrTopa/dotinfra")
+        epilog="Exit codes: 0 ok, 1 error, 2 sync conflict, 3 this dotinfra is older than the "
+               "CMDB's min_version (run `dotinfra upgrade`). Run `dotinfra COMMAND --help` "
+               "for details. Docs: https://github.com/PiotrTopa/dotinfra")
     parser.add_argument("--root", metavar="PATH",
                         help="CMDB root (default: $DOTINFRA_ROOT, the nearest folder with "
                              ".dotinfra.toml, or ~/.infra)")
@@ -218,7 +301,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
     for register in (scaffold.register, _register_browse, lint.register, index.register,
                      sshconfig.register, vault_module.register, sync.register,
-                     _register_merge_driver, drift.register, skills.register, _register_doctor):
+                     _register_merge_driver, drift.register, skills.register, migrate.register,
+                     upgrade.register, _register_doctor):
         register(sub)
     for module, name, help_text in OPTIONAL_MODULES:
         _register_optional(sub, module, name, help_text)
@@ -234,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (DotinfraError, OSError) as exc:
         print(f"dotinfra: error: {exc}", file=sys.stderr)
-        return 1
+        return getattr(exc, "exit_code", 1)
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return 130
