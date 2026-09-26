@@ -41,7 +41,7 @@ Config lives in `[monitoring]` of `.dotinfra.toml` (`grafana_url`,
 ```sh
 dotinfra monitoring render                 # to monitoring.bundle_dir (default ~/dotinfra-monitoring)
 cd ~/dotinfra-monitoring && cp -n .env.example .env
-dotinfra vault exec grafana_password -- sh -c 'IFS= read -r p; printf "GRAFANA_ADMIN_PASSWORD=%s\n" "$p" >> .env'
+dotinfra vault exec grafana_password -- sh -c 'IFS= read -r p; printf "GRAFANA_ADMIN_PASSWORD=%s\n" "$p" >> .env'  # from the vault
 chmod 600 .env && docker compose up -d     # add --profile node to monitor this host too
 ```
 
