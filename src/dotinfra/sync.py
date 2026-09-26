@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from .context import Context, get_context
 from .index import INDEX_NAME, is_stale, write_index
 from .lint import format_issue, run_lint
 from .reconcile import conflict_blocks, has_conflict_markers, merge_text
+from .versioning import GUARD_EXIT, installed_version, is_newer
 
 LOCK_STALE_SECONDS = 600
 REPORT_NAME = "RECONCILE.md"
@@ -252,6 +254,61 @@ def _merge(ctx: Context, ref: str) -> list[str]:
     return remaining
 
 
+# --------------------------------------------------------------------------- version guard
+
+
+def incoming_min_version(root: Path, ref: str) -> str | None:
+    """``[cmdb] min_version`` of the ``.dotinfra.toml`` in commit ``ref`` (None if absent)."""
+    result = git(root, "show", f"{ref}:{CONFIG_NAME}", check=False)
+    if result.returncode != 0:
+        return None
+    try:
+        value = tomllib.loads(result.stdout).get("cmdb", {}).get("min_version")
+    except tomllib.TOMLDecodeError:
+        return None
+    return str(value) if value else None
+
+
+def _blocked_refs(ctx: Context, refs: list[str]) -> list[tuple[str, str]]:
+    """Refs with new commits whose CMDB needs a newer dotinfra than this one."""
+    blocked = []
+    for ref in refs:
+        if not has_ref(ctx.root, ref) or not has_ref(ctx.root, "HEAD"):
+            continue
+        if not ahead_behind(ctx.root, "HEAD", ref)[1]:
+            continue
+        required = incoming_min_version(ctx.root, ref)
+        if is_newer(required):
+            blocked.append((ref, required))
+    return blocked
+
+
+# --------------------------------------------------------------------------- monitoring
+
+
+def refresh_server_targets(ctx: Context) -> str | None:
+    """On the monitoring host (``[monitoring] role = "server"``) rewrite the Prometheus
+    file_sd targets in ``<bundle_dir>/targets``; returns a summary when files changed."""
+    if str(ctx.config.get("monitoring", "role", "client")) != "server":
+        return None
+    try:
+        from .model import load_cmdb
+        from .monitoring import TARGETS_DIRNAME, build_targets, write_targets
+
+        outdir = ctx.config.path("monitoring", "bundle_dir") / TARGETS_DIRNAME
+        before = {p.name: p.read_bytes() for p in outdir.glob("*.json")} if outdir.is_dir() \
+            else {}
+        targets, _ = build_targets(load_cmdb(ctx.root))
+        _, removed = write_targets(targets, outdir)
+        after = {p.name: p.read_bytes() for p in outdir.glob("*.json")}
+    except Exception as exc:  # the CMDB sync itself succeeded; never fail it for this
+        _warn(f"warning: could not refresh monitoring targets: {exc}")
+        return None
+    if before == after and not removed:
+        return None
+    return f"monitoring targets refreshed in {outdir} ({len(targets)} job(s))"
+
+
 # --------------------------------------------------------------------------- sync
 
 
@@ -306,6 +363,15 @@ def _sync_locked(ctx: Context, branch: str, *, push: bool, dry_run: bool,
         else:
             fetched.append(remote)
 
+    blocked = _blocked_refs(ctx, [f"{remote}/{branch}" for remote in fetched])
+    if blocked:
+        for ref, required in blocked:
+            _warn(f"error: {ref} needs dotinfra ≥ {required} (installed: "
+                  f"{installed_version()}); nothing was merged")
+        _warn("run `dotinfra upgrade`, then `dotinfra sync` again (your local commits are kept)")
+        _log(ctx, "refused: " + ", ".join(f"{ref} needs {req}" for ref, req in blocked))
+        return GUARD_EXIT
+
     for remote in fetched:
         ref = f"{remote}/{branch}"
         if not has_ref(root, ref) or not has_ref(root, "HEAD"):
@@ -336,6 +402,11 @@ def _sync_locked(ctx: Context, branch: str, *, push: bool, dry_run: bool,
         git(root, "add", "--", INDEX_NAME)
         git(root, "commit", "-q", "-m", "index: regenerate")
         summary.append("index regenerated")
+
+    refreshed = refresh_server_targets(ctx)
+    if refreshed:
+        print(refreshed)
+        summary.append("targets refreshed")
 
     hub = ctx.config.get("sync", "remote", "")
     if push and hub in fetched and has_ref(root, "HEAD"):
@@ -589,8 +660,11 @@ def register(subparsers) -> None:
     p = subparsers.add_parser(
         "sync", help="commit, fetch, merge and push the CMDB",
         description="Commit local edits, fetch the hub and peers, merge them (section-aware), "
-                    "regenerate INDEX.md and push to the hub. Exit codes: 0 ok, 1 a remote "
-                    "failed, 2 conflicts need `dotinfra reconcile`.")
+                    "regenerate INDEX.md and push to the hub. On the monitoring host "
+                    "([monitoring] role = \"server\") the Prometheus targets are refreshed too. "
+                    "Incoming commits that need a newer dotinfra are not merged. Exit codes: "
+                    "0 ok, 1 a remote failed, 2 conflicts need `dotinfra reconcile`, 3 this "
+                    "dotinfra is too old (run `dotinfra upgrade`).")
     p.add_argument("--no-push", action="store_true", help="do not push to the hub remote")
     p.add_argument("--dry-run", action="store_true",
                    help="only fetch and report what would be committed/merged")
