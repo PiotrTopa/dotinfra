@@ -113,7 +113,7 @@ def format_events(annotations: list[dict]) -> str:
     if not annotations:
         return "no events"
     rows = sorted(annotations, key=lambda a: a.get("time", 0), reverse=True)
-    lines = [f"{'ID':>6}  {'TIME (UTC)':<17}  {'HOST':<14}  {'TYPE':<12}  TEXT"]
+    lines = [f"{'ID':>7}  {'TIME (UTC)':<17}  {'HOST':<14}  {'TYPE':<12}  TEXT"]
     for a in rows:
         ts = datetime.fromtimestamp(a.get("time", 0) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
         end = a.get("timeEnd")
@@ -126,7 +126,7 @@ def format_events(annotations: list[dict]) -> str:
         text = (a.get("text") or "").replace("\n", " ")
         if len(text) > 90:
             text = text[:87] + "..."
-        lines.append(f"{a.get('id', ''):>6}  {ts:<17}  {host:<14}  {etype:<12}  {text}{ts_note}")
+        lines.append(f"{a.get('id', ''):>7}  {ts:<17}  {host:<14}  {etype:<12}  {text}{ts_note}")
     return "\n".join(lines)
 
 
