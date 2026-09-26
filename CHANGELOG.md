@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-26
+
+### Fixed
+
+- Merge driver: a section both devices only *appended* to (two new `Known issues`
+  bullets) is merged by keeping both additions instead of a conflict; `updated:`
+  emptied on one side no longer merges to the string `None`; non-UTF-8 input falls
+  back to `git merge-file` instead of a traceback; `git merge-file` output is read
+  as UTF-8 regardless of the locale.
+- Sync: `INDEX.md` is regenerated after the component files are reconciled;
+  conflict stages are read as bytes; `peer add` refuses option-like URLs.
+- Security: `address`/`ssh.*` values that would become an ssh option or an
+  ssh_config directive (leading `-`, whitespace, control characters, a quoted
+  newline) are a lint error, skipped by `ssh-config` and refused by `drift`.
+- Drift: point releases are not OS drift (`Ubuntu 24.04` vs `24.04.1`).
+- Lint: also detects age identities, PGP private key blocks, `github_pat_`/`gho_`
+  style tokens and `sk-proj-` keys.
+- CLI: OS errors and broken pipes are reported without tracebacks; `ls`/`show`
+  warn about component files that failed to parse instead of hiding them;
+  `grafana`/`event` failures use the same `dotinfra: error:` format as every
+  other command and their subcommands are required.
+- Vault: warns when the file vault is readable by other users.
+- Monitoring: `targets` only prunes JSON files it generated itself.
+
+### Added
+
+- `dotinfra vault identity`: create this device's age identity if missing and
+  print its public key — the missing step when adding a device to an age vault.
+
 ## [0.1.0] — 2026-09-26
 
 First public release.
@@ -31,5 +60,6 @@ First public release.
   Grafana annotations (`event add|list|rm`).
 - Fictional example CMDB `examples/homelab`.
 
-[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PiotrTopa/dotinfra/releases/tag/v0.1.0
