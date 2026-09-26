@@ -264,21 +264,13 @@ def _cmd_render(args) -> int:
     return 0
 
 
-def _cmd_help(parser):
-    def handler(args) -> int:
-        parser.print_help()
-        return 1
-    return handler
-
-
 def register(subparsers) -> None:
     p = subparsers.add_parser(
         "monitoring",
         help="Prometheus targets and the monitoring bundle",
         description="Generate Prometheus file_sd targets and the Prometheus+Grafana bundle from the CMDB.",
     )
-    p.set_defaults(func=_cmd_help(p))
-    sub = p.add_subparsers(dest="monitoring_cmd", metavar="COMMAND")
+    sub = p.add_subparsers(dest="monitoring_cmd", metavar="COMMAND", required=True)
 
     t = sub.add_parser("targets", help="write Prometheus file_sd JSON, one file per job")
     t.add_argument("--output", metavar="DIR",

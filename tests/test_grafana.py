@@ -5,7 +5,7 @@ import unittest
 import urllib.error
 from unittest import mock
 
-from dotinfra import grafana
+from dotinfra import DotinfraError, grafana
 
 
 class FakeResponse(io.BytesIO):
@@ -166,7 +166,7 @@ class FakeCtx:
     def secret(self, key):
         self.asked.append(key)
         if key not in self.secrets:
-            raise KeyError(key)
+            raise DotinfraError(f"no secret {key!r} in the vault")
         return self.secrets[key]
 
 

@@ -7,11 +7,13 @@ every time series, coloured by type.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-from .grafana import EVENT_TAG, EVENT_TYPES, GrafanaError, client_from_context
+from . import DotinfraError
+from .grafana import EVENT_TAG, EVENT_TYPES, client_from_context
 
 VALID_TYPES = tuple(EVENT_TYPES)
 
@@ -133,19 +135,11 @@ def _cmd_add(args) -> int:
         end_ms = parse_time(args.end) if args.end else None
         payload = build_event(args.host, args.type, text, time_ms, end_ms)
     except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    try:
-        known = {c.id for c in ctx.components()}
-    except Exception:  # noqa: BLE001 - a broken CMDB must not block logging an outage
-        known = set()
+        raise DotinfraError(str(e)) from None
+    known = {c.id for c in ctx.components()}
     if known and args.host not in known:
         print(f"warning: '{args.host}' is not a component id in {ctx.root}", file=sys.stderr)
-    try:
-        result = client_from_context(ctx).request("POST", "/api/annotations", payload)
-    except GrafanaError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+    result = client_from_context(ctx).request("POST", "/api/annotations", payload)
     print(f"event {result.get('id', '?')} added: {args.host} {args.type}")
     return 0
 
@@ -157,16 +151,10 @@ def _cmd_list(args) -> int:
     try:
         since = parse_time(args.since) if args.since else None
     except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    try:
-        data = client_from_context(ctx).request(
-            "GET", "/api/annotations", params=list_params(args.host, args.type, args.limit, since))
-    except GrafanaError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+        raise DotinfraError(str(e)) from None
+    data = client_from_context(ctx).request(
+        "GET", "/api/annotations", params=list_params(args.host, args.type, args.limit, since))
     if args.json:
-        import json
         print(json.dumps(data, indent=2))
     else:
         print(format_events(data or []))
@@ -177,20 +165,9 @@ def _cmd_rm(args) -> int:
     from .context import get_context
 
     ctx = get_context(args)
-    try:
-        client_from_context(ctx).request("DELETE", f"/api/annotations/{args.id}")
-    except GrafanaError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+    client_from_context(ctx).request("DELETE", f"/api/annotations/{args.id}")
     print(f"event {args.id} deleted")
     return 0
-
-
-def _cmd_help(parser):
-    def handler(args) -> int:
-        parser.print_help()
-        return 1
-    return handler
 
 
 def register(subparsers) -> None:
@@ -198,8 +175,7 @@ def register(subparsers) -> None:
         "event", help="infra event log (Grafana annotations)",
         description="Record and list infrastructure events as Grafana annotations "
                     f"(types: {', '.join(VALID_TYPES)}).")
-    p.set_defaults(func=_cmd_help(p))
-    sub = p.add_subparsers(dest="event_cmd", metavar="COMMAND")
+    sub = p.add_subparsers(dest="event_cmd", metavar="COMMAND", required=True)
 
     a = sub.add_parser("add", help="record an event")
     a.add_argument("--host", required=True, metavar="ID", help="component id the event is about")

@@ -17,6 +17,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from . import DotinfraError
+
 DATASOURCE_UID = "dotinfra-prometheus"
 DASHBOARD_UID = "dotinfra-fleet"
 EVENT_TAG = "dotinfra"
@@ -273,8 +275,8 @@ def dashboard_json(dashboard: dict) -> str:
 
 # ---------------------------------------------------------------- API client
 
-class GrafanaError(RuntimeError):
-    pass
+class GrafanaError(DotinfraError):
+    """A Grafana API or credential problem; the CLI prints it without a traceback."""
 
 
 class GrafanaClient:
@@ -353,19 +355,15 @@ def client_from_context(ctx) -> GrafanaClient:
     get = ctx.config.get
     url = get("monitoring", "grafana_url", "http://localhost:3000")
     token_key = get("monitoring", "grafana_token_key", "") or ""
+    key = token_key or get("monitoring", "grafana_password_key", "grafana_password")
     try:
-        if token_key:
-            return GrafanaClient(url, token=ctx.secret(token_key))
-        user = get("monitoring", "grafana_user", "admin")
-        key = get("monitoring", "grafana_password_key", "grafana_password")
-        return GrafanaClient(url, user=user, password=ctx.secret(key))
-    except GrafanaError:
-        raise
-    except Exception as e:  # vault missing, key missing, age not installed, ...
-        key = token_key or get("monitoring", "grafana_password_key", "grafana_password")
-        raise GrafanaError(
-            f"cannot read Grafana credentials from vault key '{key}': {e}\n"
-            f"hint: dotinfra vault set {key}") from None
+        secret = ctx.secret(key)
+    except DotinfraError as e:  # vault unreadable, key missing, age not installed, ...
+        raise GrafanaError(f"cannot read Grafana credentials from vault key '{key}': {e}\n"
+                           f"hint: dotinfra vault set {key}") from None
+    if token_key:
+        return GrafanaClient(url, token=secret)
+    return GrafanaClient(url, user=get("monitoring", "grafana_user", "admin"), password=secret)
 
 
 # ---------------------------------------------------------------- CLI
@@ -392,38 +390,25 @@ def _cmd_push(args) -> int:
         try:
             dashboard = json.loads(Path(args.file).expanduser().read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
-            print(f"error: cannot read dashboard {args.file}: {e}", file=sys.stderr)
-            return 1
+            raise DotinfraError(f"cannot read dashboard {args.file}: {e}") from None
     else:
         dashboard = build_fleet_dashboard(name=ctx.config.get("cmdb", "name", "home") or "home")
-    try:
-        client = client_from_context(ctx)
-        folder_uid = client.ensure_folder(args.folder, "dotinfra") if args.folder else None
-        result = client.push_dashboard(dashboard, folder_uid=folder_uid)
-        if args.home:
-            client.set_home_dashboard(dashboard.get("uid", DASHBOARD_UID))
-    except GrafanaError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+    client = client_from_context(ctx)
+    folder_uid = client.ensure_folder(args.folder, "dotinfra") if args.folder else None
+    result = client.push_dashboard(dashboard, folder_uid=folder_uid)
+    if args.home:
+        client.set_home_dashboard(dashboard.get("uid", DASHBOARD_UID))
     url = result.get("url", "")
     print(f"pushed dashboard '{dashboard.get('title')}' ({result.get('status', 'ok')}) "
           f"{client.url}{url}")
     return 0
 
 
-def _cmd_help(parser):
-    def handler(args) -> int:
-        parser.print_help()
-        return 1
-    return handler
-
-
 def register(subparsers) -> None:
     p = subparsers.add_parser(
         "grafana", help="fleet dashboard: generate JSON or push via the Grafana API",
         description="Generate the fleet dashboard or push it to Grafana (credentials from the vault).")
-    p.set_defaults(func=_cmd_help(p))
-    sub = p.add_subparsers(dest="grafana_cmd", metavar="COMMAND")
+    sub = p.add_subparsers(dest="grafana_cmd", metavar="COMMAND", required=True)
 
     d = sub.add_parser("dashboard", help="print or write the fleet dashboard JSON")
     d.add_argument("--output", metavar="FILE", help="write to FILE instead of stdout")

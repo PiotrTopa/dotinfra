@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest import mock
 
-from dotinfra import events, grafana
+from dotinfra import DotinfraError, events, grafana
 
 NOW = datetime(2026, 9, 26, 12, 0, 0, tzinfo=timezone.utc)
 NOW_MS = int(NOW.timestamp() * 1000)
@@ -117,9 +117,14 @@ class CliHandlerTest(unittest.TestCase):
             p.stop()
 
     def call(self, handler, **kw):
+        """Run a handler the way cli.main does: DotinfraError -> message on stderr, exit 1."""
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            code = handler(SimpleNamespace(root=None, **kw))
+            try:
+                code = handler(SimpleNamespace(root=None, **kw))
+            except DotinfraError as exc:
+                print(f"dotinfra: error: {exc}", file=err)
+                code = 1
         return code, out.getvalue(), err.getvalue()
 
     def test_add(self):
