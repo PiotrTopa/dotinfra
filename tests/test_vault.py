@@ -168,8 +168,9 @@ class FakeAgeTest(VaultTestCase):
         self.assertTrue((self.root / "vault.age").read_bytes().startswith(b"FAKEAGE age1"))
 
         config = self.root / ".dotinfra.toml"
-        config.write_text(config.read_text().replace("age_recipients = []",
-                                                     'age_recipients = ["age1laptop"]'))
+        own = vault.public_key()
+        config.write_text(config.read_text().replace(f'age_recipients = ["{own}"]',
+                                                     f'age_recipients = ["{own}", "age1laptop"]'))
         code, out, _ = self.cli("rekey")
         self.assertEqual(code, 0)
         self.assertIn("2 recipient(s)", out)
@@ -183,6 +184,32 @@ class FakeAgeTest(VaultTestCase):
         self.assertFalse(self.vault_path.exists())
         code, _, err = self.cli("migrate", "--to", "age")
         self.assertIn("already uses the age backend", err)
+
+    def test_identity_is_created_once_recorded_and_printed(self):
+        code, out, err = self.cli("identity")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(out.startswith("age1"))
+        self.assertIn("created age identity", err)
+        self.assertIn("age_recipients", err)
+        identity = self.home / ".config/dotinfra/age.key"
+        self.assertEqual(stat.S_IMODE(identity.stat().st_mode), 0o600)
+        self.assertEqual(load_config(self.root).get("vault", "age_recipients"), [out.strip()])
+        code, again, err = self.cli("identity")
+        self.assertEqual((code, again, err), (0, out, ""))
+
+    def test_migrate_records_own_key_so_other_devices_writes_stay_readable(self):
+        self.cli("set", "a", stdin="1\n")
+        self.assertEqual(self.cli("migrate", "--to", "age")[0], 0)
+        own = self.cli("identity")[1].strip()
+        self.assertEqual(load_config(self.root).get("vault", "age_recipients"), [own])
+
+    def test_missing_identity_explains_the_next_step(self):
+        (self.root / ".dotinfra.toml").write_text('[vault]\nbackend = "age"\n')
+        (self.root / "vault.age").write_bytes(b"FAKEAGE age1other\n{}")
+        code, _, err = self.cli("list")
+        self.assertEqual(code, 1)
+        self.assertIn("dotinfra vault identity", err)
+        self.assertIn("dotinfra vault rekey", err)
 
     def test_rekey_requires_age(self):
         code, _, err = self.cli("rekey")

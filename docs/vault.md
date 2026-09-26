@@ -15,6 +15,7 @@ dotinfra vault exec nas_sudo -- ssh nas sudo -S apt upgrade -y
 dotinfra vault rm old_key
 dotinfra vault import ~/old-passwords.json [--overwrite]
 dotinfra vault migrate --to age [--remove-plaintext]
+dotinfra vault identity                 # age: create this device's identity, register + print its public key
 dotinfra vault rekey                    # age: re-encrypt after adding a device
 ```
 
@@ -71,15 +72,17 @@ dotinfra sync
 ```
 
 `migrate` creates this device's identity if needed, verifies the encrypted
-copy, switches `backend` in `.dotinfra.toml`, and prints the public key.
+copy, switches `backend` in `.dotinfra.toml` and records the device's public
+key in `age_recipients`. That list is the full set of devices that can read the
+vault; it syncs with the CMDB, and every device encrypts to all of it.
 
 **Adding a device** to an age vault:
 
-1. On the new device (after cloning the CMDB):
-   `age-keygen -o ~/.config/dotinfra/age.key` and note the `Public key: age1...` line.
-2. On a device that can already decrypt: add that public key to
-   `[vault] age_recipients` in `.dotinfra.toml`, run `dotinfra vault rekey`,
-   then `dotinfra sync`.
+1. On the new device (after cloning the CMDB): `dotinfra vault identity` creates
+   `~/.config/dotinfra/age.key`, adds its public key to `age_recipients`, prints
+   it. Then `dotinfra sync`.
+2. On a device that can already decrypt: `dotinfra sync` (gets the new key),
+   `dotinfra vault rekey`, `dotinfra sync`.
 3. On the new device: `dotinfra sync`, `dotinfra vault list`.
 
 **Removing a device**: delete its key from `age_recipients`, `dotinfra vault rekey`,

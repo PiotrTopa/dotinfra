@@ -51,8 +51,8 @@ Key naming: `<component-id>_<purpose>` — `nas_sudo`, `router_admin`,
 
 ## Lint found a secret
 
-`dotinfra lint` flags private keys, `password: <value>`, AWS/GitHub/OpenAI-style
-tokens and Slack tokens in tracked files.
+`dotinfra lint` flags private key blocks, age identities, `password: <value>`,
+AWS/GitHub/OpenAI-style tokens and Slack tokens in tracked files.
 
 1. Move the value into the vault (`dotinfra vault set KEY`, user runs it).
 2. Replace it in the file with the key name.
@@ -67,8 +67,11 @@ tokens and Slack tokens in tracked files.
 - **file** (default): `~/.config/dotinfra/vault.json`, mode 0600, per device, not synced.
   Copy it to new devices out of band (`scp`), or switch to age.
 - **age**: `dotinfra vault migrate --to age` encrypts into `vault.age` in the CMDB.
-  Each device has its own identity (`~/.config/dotinfra/age.key`). Adding a device:
-  put its public key in `[vault] age_recipients` in `.dotinfra.toml`, then
-  `dotinfra vault rekey` on a device that can already decrypt, then `dotinfra sync`.
+  Each device has its own identity (`~/.config/dotinfra/age.key`); `[vault]
+  age_recipients` lists every device's public key and syncs with the CMDB.
+  Adding a device: `dotinfra vault identity && dotinfra sync` on it, then
+  `dotinfra sync && dotinfra vault rekey && dotinfra sync` on a device that can
+  already decrypt, then `dotinfra sync` on the new one. "identity not found"
+  means exactly this is still to do.
 - Legacy flat JSON `{"key": "value"}` file: `dotinfra vault import FILE`, verify
   with `dotinfra vault list`, then ask the user to delete the old file.

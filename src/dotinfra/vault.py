@@ -139,15 +139,17 @@ class AgeVault(Vault):
     def public_key(self) -> str:
         if not self.identity.is_file():
             raise VaultError(f"age identity {self.identity} not found; create it with "
-                             f"`age-keygen -o {self.identity}` "
-                             "or `dotinfra vault migrate --to age`")
+                             "`dotinfra vault identity`")
         return _run([age_binary("age-keygen"), "-y", str(self.identity)]).decode().strip()
 
     def load(self) -> dict[str, str]:
         if not self.path.exists():
             return {}
         if not self.identity.is_file():
-            raise VaultError(f"cannot decrypt {self.path}: identity {self.identity} not found")
+            raise VaultError(f"cannot decrypt {self.path}: identity {self.identity} not found. "
+                             "Run `dotinfra vault identity` and `dotinfra sync` here, then "
+                             "`dotinfra vault rekey` and `dotinfra sync` on a device that can "
+                             "decrypt, then sync here again")
         plain = _run([age_binary(), "--decrypt", "-i", str(self.identity), str(self.path)])
         try:
             return _validate(json.loads(plain or b"{}"), str(self.path))
@@ -186,6 +188,21 @@ def ensure_age_identity(path: Path) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _run([age_binary("age-keygen"), "-o", str(path)])
     os.chmod(path, 0o600)
+    return True
+
+
+def ensure_recipient(config: Config, public_key: str) -> bool:
+    """Record ``public_key`` in ``[vault] age_recipients``; return True when it was added.
+
+    ``age_recipients`` is the full set of devices (it syncs with the CMDB), so every
+    device's own key belongs in it: otherwise a vault written on one device could not
+    be read on the others.
+    """
+    recipients = [str(r) for r in config.get("vault", "age_recipients", []) if r]
+    if public_key in recipients:
+        return False
+    set_toml_value(config.root / CONFIG_NAME, "vault", "age_recipients",
+                   recipients + [public_key])
     return True
 
 
@@ -270,7 +287,7 @@ def cmd_migrate(args) -> int:
     if target.keys() and not args.force:
         raise VaultError(f"{target.describe()} already holds secrets; use --force to overwrite")
     if isinstance(target, AgeVault) and ensure_age_identity(target.identity):
-        print(f"created age identity {target.identity} (back it up; it is not synced)")
+        print(f"created age identity {target.identity} (back it up; it is never synced)")
     data = source.load()
     target.save(data)
     if target.load() != data:
@@ -278,9 +295,10 @@ def cmd_migrate(args) -> int:
     set_toml_value(ctx.root / CONFIG_NAME, "vault", "backend", args.to)
     print(f"migrated {len(data)} secret(s) to {target.describe()}; backend = \"{args.to}\"")
     if isinstance(target, AgeVault):
-        print(f"this device's public key: {target.public_key()}\n"
-              "add it to [vault] age_recipients on your other devices, then run "
-              "`dotinfra vault rekey` there")
+        ensure_recipient(ctx.config, target.public_key())
+        print("this device's public key is in [vault] age_recipients. To add another device: "
+              "`dotinfra vault identity` and `dotinfra sync` there, then `dotinfra vault rekey` "
+              "and `dotinfra sync` here")
     if isinstance(source, FileVault) and source.path.exists():
         if args.remove_plaintext:
             source.path.unlink()
@@ -291,13 +309,32 @@ def cmd_migrate(args) -> int:
     return 0
 
 
+def cmd_identity(args) -> int:
+    ctx = get_context(args)
+    vault = open_vault(ctx.config, backend="age")
+    assert isinstance(vault, AgeVault)
+    if ensure_age_identity(vault.identity):
+        print(f"created age identity {vault.identity} (back it up; it is never synced)",
+              file=sys.stderr)
+    public_key = vault.public_key()
+    if ensure_recipient(ctx.config, public_key):
+        print(f"added it to [vault] age_recipients in {CONFIG_NAME}. Next: `dotinfra sync` "
+              "here; `dotinfra vault rekey` and `dotinfra sync` on a device that can decrypt; "
+              "`dotinfra sync` here again", file=sys.stderr)
+    print(public_key)
+    return 0
+
+
 def cmd_rekey(args) -> int:
-    vault = open_vault(get_context(args).config)
+    ctx = get_context(args)
+    vault = open_vault(ctx.config)
     if not isinstance(vault, AgeVault):
         raise VaultError("rekey only applies to the age backend")
     data = vault.load()
+    ensure_recipient(ctx.config, vault.public_key())
     vault.save(data)
-    print(f"re-encrypted {len(data)} secret(s) to {len(vault.all_recipients())} recipient(s)")
+    print(f"re-encrypted {len(data)} secret(s) to {len(vault.all_recipients())} recipient(s); "
+          "now `dotinfra sync`")
     return 0
 
 
@@ -349,6 +386,16 @@ def register(subparsers) -> None:
     p.add_argument("--remove-plaintext", action="store_true",
                    help="delete the plaintext file vault after a verified migration")
     p.set_defaults(func=cmd_migrate)
+
+    sub.add_parser("identity", help="create this device's age identity if missing; print "
+                                    "its public key",
+                   description="Create ~/.config/dotinfra/age.key (or [vault] age_identity) if "
+                               "it does not exist, record its public key in [vault] "
+                               "age_recipients and print it. To let this device read an age "
+                               "vault: `dotinfra sync` here, then `dotinfra vault rekey` and "
+                               "`dotinfra sync` on a device that can already decrypt, then sync "
+                               "here again."
+                   ).set_defaults(func=cmd_identity)
 
     sub.add_parser("rekey", help="re-encrypt the age vault to the current recipients",
                    description="Re-encrypt vault.age to this device's identity plus "

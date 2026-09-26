@@ -10,7 +10,7 @@ backend = "file"
 path = "~/.config/dotinfra/vault.json"
 age_file = "vault.age"
 age_identity = "~/.config/dotinfra/age.key"
-age_recipients = []
+age_recipients = []              # public keys of every device (vault identity / migrate add this one's)
 
 [sync]
 remote = "origin"

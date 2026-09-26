@@ -9,7 +9,7 @@ backend = "file"                 # "file" | "age"
 path = "~/.config/dotinfra/vault.json"   # file backend: plaintext JSON, mode 0600, outside the CMDB
 age_file = "vault.age"           # age backend: encrypted file inside the CMDB (syncs with it)
 age_identity = "~/.config/dotinfra/age.key"
-age_recipients = []              # public keys of your other devices
+age_recipients = []              # public keys of every device (vault identity / migrate add this one's)
 
 [sync]
 remote = "origin"                # hub remote; "" = peers only
