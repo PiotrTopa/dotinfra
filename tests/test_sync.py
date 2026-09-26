@@ -29,7 +29,9 @@ class TwoDeviceTestCase(IsolatedTestCase):
         init_bare(self.hub)
         self.a = self.make_cmdb("a")
         git(self.a, "remote", "add", "origin", str(self.hub))
-        new_component(self.a, "server", "web1", address="10.0.0.5")
+        path = new_component(self.a, "server", "web1", address="10.0.0.5")
+        # a legacy (pre-0.3) History section: the merge driver still unions it
+        path.write_text(path.read_text() + "\n## History\n\n- 2026-01-01 — created\n")
         self.assertSync(self.a)
         self.b = self.tmp / "b"
         git(self.tmp, "clone", "-q", str(self.hub), str(self.b))
@@ -71,7 +73,8 @@ class SyncMergeTest(TwoDeviceTestCase):
                   ("updated: ", "updated: 2099-01-02 #"),
                   ("## History\n\n", "## History\n\n- 2099-01-02 — installed nginx (a)\n"))
         self.edit(self.b, "servers/web1.md",
-                  ("## Known issues\n", "## Known issues\n\n- fan is noisy\n"),
+                  ("## Constraints & known issues\n",
+                   "## Constraints & known issues\n\n- fan is noisy\n"),
                   ("updated: ", "updated: 2099-01-03 #"),
                   ("tags: [fleet]", "tags: [fleet, web]"),
                   ("## History\n\n", "## History\n\n- 2099-01-03 — replaced fan (b)\n"))

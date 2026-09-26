@@ -18,7 +18,11 @@ updated: {{date}}
 
 ## Overview
 
-What it does and who uses it.
+What it does and who uses it (2–3 lines).
+
+## Access
+
+URLs, admin accounts (vault key names), how to restart it.
 
 ## Configuration
 
@@ -27,16 +31,4 @@ What it does and who uses it.
 - Data directory and backups:
 - Ports:
 
-## Access
-
-URLs, admin accounts (vault key names), how to restart it.
-
-## Secrets
-
-Vault keys only.
-
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues

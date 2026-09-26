@@ -16,24 +16,16 @@ updated: {{date}}
 
 ## Overview
 
-Registrar, renewal date, who owns the account.
-
-## Configuration
-
-- Nameservers:
-- Important records (A/AAAA/CNAME/MX/TXT):
-- TLS certificates (issuer, renewal mechanism):
+What the domain is for; registrar, renewal date, account owner (2–3 lines).
 
 ## Access
 
 Where the DNS is managed and how to log in (vault key names, not passwords).
 
-## Secrets
+## Configuration
 
-Vault keys only.
+- Nameservers:
+- Important records (A/AAAA/CNAME/MX/TXT):
+- TLS certificates (issuer, renewal):
 
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues

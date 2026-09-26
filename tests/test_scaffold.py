@@ -48,6 +48,16 @@ class InitTest(IsolatedTestCase):
         self.assertIn("kept    AGENTS.md", out)
         self.assertEqual((root / "AGENTS.md").read_text(), "custom rules\n")
 
+    def test_init_creates_no_history_sections(self):
+        root = self.make_cmdb(use_git=False)
+        for kind in KINDS:
+            new_component(root, kind, f"x-{kind}")
+        for path in root.rglob("*.md"):
+            self.assertNotRegex(path.read_text(), r"(?im)^## +history\b", path.name)
+        config = (root / ".dotinfra.toml").read_text()
+        self.assertIn('backend = "auto"', config)
+        self.assertIn("max_lines = 120", config)
+
     def test_no_git(self):
         root = self.make_cmdb(use_git=False)
         self.assertFalse((root / ".git").exists())
@@ -77,10 +87,12 @@ class NewTest(IsolatedTestCase):
                 self.assertEqual(meta["address"], "10.0.0.9")
                 self.assertEqual(meta["updated"], "2026-01-02")
                 self.assertIn("# X: one\n", body)
-                for section in ("Overview", "Configuration", "Access", "Secrets",
-                                "Known issues", "History"):
+                for section in ("Overview", "Access", "Configuration",
+                                "Constraints & known issues"):
                     self.assertIn(f"\n## {section}\n", body)
-                self.assertIn("- 2026-01-02 — created", body)
+                # fact sheets: no journal, no dated lines
+                self.assertNotRegex(body, r"(?im)^## +(history|changelog|log)\b")
+                self.assertNotIn("2026-01-02", body)
 
     def test_cli_new(self):
         code, out, _ = run_cli("--root", self.root, "new", "servers", "web1",

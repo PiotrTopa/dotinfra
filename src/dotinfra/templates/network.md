@@ -14,7 +14,12 @@ updated: {{date}}
 
 ## Overview
 
-Purpose, physical/virtual medium (LAN, VLAN, WireGuard, Tailscale...).
+Purpose and medium (LAN, VLAN, WireGuard, Tailscale...), 2–3 lines.
+
+## Access
+
+Who and what can reach this network, and from where. Vault keys (Wi-Fi PSK,
+VPN keys) by name only.
 
 ## Configuration
 
@@ -23,16 +28,4 @@ Purpose, physical/virtual medium (LAN, VLAN, WireGuard, Tailscale...).
 - DHCP range / static leases:
 - DNS:
 
-## Access
-
-Who and what can reach this network, and from where.
-
-## Secrets
-
-Vault keys only (Wi-Fi PSKs, VPN private keys...).
-
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues

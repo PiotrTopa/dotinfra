@@ -20,7 +20,11 @@ updated: {{date}}
 
 ## Overview
 
-Model, location, uplink (ISP, modem), which networks it serves.
+Model, location, uplink (ISP, modem), networks it serves (2–3 lines).
+
+## Access
+
+Web UI URL, SSH, recovery procedure if it bricks. Vault keys: `{{id}}_admin`.
 
 ## Configuration
 
@@ -30,16 +34,4 @@ Model, location, uplink (ISP, modem), which networks it serves.
 - Firewall rules worth knowing:
 - VPN:
 
-## Access
-
-Web UI URL, SSH, and the recovery procedure if it bricks.
-
-## Secrets
-
-Vault keys only.
-
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues

@@ -22,26 +22,17 @@ updated: {{date}}
 
 ## Overview
 
-What this machine is, where it lives physically, and who relies on it.
+What this machine is for, where it lives, who relies on it (2–3 lines).
+
+## Access
+
+`ssh {{id}}` (after `dotinfra ssh-config`); console/IPMI fallback. Vault keys:
+`{{id}}_sudo` (sudo password).
 
 ## Configuration
 
 - Hardware:
 - Storage:
-- Key packages / services:
+- Services:
 
-## Access
-
-How to get a shell (`ssh {{id}}` once `dotinfra ssh-config` is installed) and any
-console/IPMI fallback.
-
-## Secrets
-
-Vault keys only, e.g. `{{id}}_sudo` (sudo password). Fetch with
-`dotinfra vault get KEY` or pipe with `dotinfra vault exec KEY -- CMD`.
-
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues

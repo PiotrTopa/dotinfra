@@ -16,18 +16,10 @@ updated: {{date}}
 
 ## Overview
 
-Make/model, serial, location, what it is used for.
-
-## Configuration
+Make/model, location, what it is used for (2–3 lines).
 
 ## Access
 
-## Secrets
+## Configuration
 
-Vault keys only.
-
-## Known issues
-
-## History
-
-- {{date}} — created
+## Constraints & known issues
