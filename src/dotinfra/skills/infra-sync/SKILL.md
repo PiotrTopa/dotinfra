@@ -63,14 +63,17 @@ alone: the next migrate would overwrite it anyway.
      command: `ip -4 addr`, `cat /etc/os-release`, `systemctl is-active X`,
      `dig +short NAME`). Keep what the host actually shows.
    - Cannot verify (host offline, no access) → keep the version with the most
-     recent evidence, and add a line under `## Known issues`:
-     `- unverified: address 10.10.0.21 vs 10.10.0.22 after merge on 2026-09-26`.
+     recent evidence, and add a line under `## Constraints & known issues`:
+     `- unverified: address 10.10.0.21 or 10.10.0.22 (conflicting edits)`.
    - Frontmatter scalar conflicts (`status`, `address`, `os`, `role`) follow the
      same rule. Lists are already unioned by the driver; drop entries that are
      no longer true.
-   - `## History` is merged automatically (union, newest first), and so are
-     sections where both sides only added lines. If markers remain in History,
-     keep every dated line from both sides; never drop history.
+   - Sections where both sides only added lines merge automatically. The
+     event log (`events/<YYYY>.md`) is unioned line by line and never
+     conflicts; if markers ever remain there, keep every line from both sides.
+   - Legacy `## History` sections (docs written before dotinfra 0.3) are still
+     unioned automatically. The result is one current-state doc: facts, not a
+     narrative of both sides' edits.
 4. Remove all markers. Keep frontmatter valid (the YAML subset; see `infra-cmdb`).
    Set `updated:` to today on files where you changed facts.
 5. Finish:

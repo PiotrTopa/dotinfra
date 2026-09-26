@@ -255,6 +255,9 @@ class MigrateSchema1Test(MigrateTestCase):
         text = text[:text.index("\n[events]")] + "\n"
         config.write_text(text.replace(f"schema = {SCHEMA}", "schema = 1"))
         self.write(root, "servers/web1.md", self.JOURNAL)
+        agents = root / "AGENTS.md"
+        legacy = (LEGACY / "0.1" / "AGENTS.md").read_text().replace("{{name}}", name)
+        agents.write_text(managed.wrap(legacy, MD, "0.2.3"))
         git(root, "add", "-A")
         git(root, "commit", "-qm", "0.2 layout")
         return root
@@ -271,6 +274,9 @@ class MigrateSchema1Test(MigrateTestCase):
         self.assertEqual(data["events"], {"backend": "auto"})
         self.assertEqual(data["lint"], {"max_lines": 120})
         self.assertEqual((root / "servers/web1.md").read_text(), self.JOURNAL)
+        agents = (root / "AGENTS.md").read_text()
+        self.assertIn("Events go to the event log", agents)
+        self.assertNotIn("## History", agents)
         self.assertEqual(self.commits(root)[0], f"migrate: dotinfra {__version__}")
         self.assertEqual(git(root, "status", "--porcelain"), "")
         # idempotent

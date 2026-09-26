@@ -59,6 +59,7 @@ until it is upgraded.
 | `routers/` | gateways, firewalls, access points with a management UI |
 | `services/` | software running somewhere (`runs_on:` a server) |
 | `devices/` | everything else with a network address or a warranty |
+| `events/` | the event log (`events/<YYYY>.md`) when `[events] backend` is `file` |
 
 `INDEX.md` is the generated inventory. `AGENTS.md` holds the rules agents
 follow (Claude Code reads it through `CLAUDE.md`).
@@ -66,10 +67,13 @@ follow (Claude Code reads it through `CLAUDE.md`).
 ## The rules, in short
 
 1. **Read first.** Look up a component before touching it.
-2. **Write back.** Update its file in the same sitting: facts in the
-   frontmatter, prose in the sections, a dated line in `## History`.
-3. **No secrets here.** Only vault key names; values live in `dotinfra vault`.
-4. **Check and sync.** `dotinfra lint`, then `dotinfra sync`.
+2. **Write back what is true now.** A component file is a short fact sheet of
+   the current state (agents read it on every task): edit facts in place,
+   remove resolved issues, never keep a journal in it.
+3. **Events go to the log.** `dotinfra event add` records what happened;
+   git history keeps old versions of every file.
+4. **No secrets here.** Only vault key names; values live in `dotinfra vault`.
+5. **Check and sync.** `dotinfra lint`, then `dotinfra sync`.
 
 ## Everyday commands
 
@@ -82,5 +86,6 @@ dotinfra ssh-config --output ~/.ssh/config.d/dotinfra
 dotinfra vault set nas_sudo                      # store a secret (prompted)
 dotinfra sync                                    # commit + exchange with other devices
 dotinfra drift nas                               # compare the doc with the live host
+dotinfra event add --host nas --type maintenance "replaced disk 2"   # the event log
 dotinfra monitoring where                        # where Grafana/Prometheus run
 ```

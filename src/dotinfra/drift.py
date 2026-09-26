@@ -259,8 +259,8 @@ def _describe(report: DriftReport) -> list[str]:
     lines += [f"  {d.field}: recorded {d.recorded!r}, observed {d.observed!r}"
               for d in report.drifts]
     if report.updated:
-        lines.append("  facts written to the component (add a History line if something "
-                     "changed)")
+        lines.append("  facts written to the component (log a notable change with "
+                     "`dotinfra event add --type observation`)")
     return lines
 
 

@@ -85,7 +85,12 @@ dotinfra new server nas --title "nas — storage" --address 10.10.0.10
 Edit each file: `status` (`active` if it is running), `role`, `tags`
 (`fleet` for compute boxes the user wants on the dashboard), `ssh:` map
 (`user`, `port`, `jump: <id of jump host>`), `depends_on`, `runs_on` for
-services, and a first History line (`- YYYY-MM-DD — added during onboarding`).
+services. Write the body as a short fact sheet of the current state —
+`Overview` (2–3 lines), `Access`, `Configuration`, `Constraints & known issues`,
+≈ ≤ 40 lines — with no History section or dated lines: agents read these files
+on every task. Anything historical the user mentions (when it was bought, past
+outages) goes to the event log if worth keeping: `dotinfra event add --host ID
+--type observation --time YYYY-MM-DD "..."`.
 Model the network too: one `networks/` file per LAN/VPN, the router in `routers/`,
 domains the user owns in `domains/`. Prefer fewer, accurate files over many guesses.
 
@@ -96,15 +101,15 @@ dotinfra ssh-config --output ~/.ssh/config.d/dotinfra   # then add to ~/.ssh/con
 dotinfra drift --update                                  # ssh to each host, record OS/kernel/CPU/RAM/IPs
 ```
 
-Hosts that fail: keep them, add a `## Known issues` line (`- not reachable over SSH from <device> on YYYY-MM-DD`).
+Hosts that fail: keep them, add a `## Constraints & known issues` line (`- not reachable over SSH from <device>`).
 Where the probe contradicts the interview, show the difference and ask.
 
 ## 6. Secrets
 
 Ask which credentials the user wants agents to be able to use (sudo passwords,
 router admin, DNS API tokens). For each: the **user** runs
-`dotinfra vault set KEY`; you add `KEY` to the component's `secrets:` and a
-line under `## Secrets`. Legacy JSON password file? `dotinfra vault import FILE`.
+`dotinfra vault set KEY`; you add `KEY` to the component's `secrets:` and
+name it under `## Access` (what it unlocks). Legacy JSON password file? `dotinfra vault import FILE`.
 Details: `infra-vault` skill. Never accept secret values in chat; if the user
 pastes one, don't repeat it, store it via `vault set`, and suggest rotating it.
 
@@ -139,6 +144,6 @@ shows them where Grafana is.
 ## 10. Wrap up
 
 Summarise for the user: number of components by kind, what was probed, what
-is unverified (Known issues), where the CMDB lives, how sync is set up, and
+is unverified (Constraints & known issues), where the CMDB lives, how sync is set up, and
 the one habit that matters: *agents read the CMDB first and write back after
 every change* — it is in `AGENTS.md` and the installed skills.

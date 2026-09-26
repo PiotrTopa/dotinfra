@@ -1,6 +1,6 @@
 ---
 name: infra-monitoring
-description: Monitoring for a dotinfra CMDB — Prometheus scrape targets generated from component `metrics:`, the Prometheus+Grafana+Pushgateway docker-compose bundle, the Fleet Overview Grafana dashboard, and the infra event log (Grafana annotations for outages, maintenance, changes, incidents, observations). Use when adding a host to monitoring, installing node_exporter or the NVIDIA DCGM exporter, (re)deploying the monitoring stack or adopting an already-running Grafana/Prometheus, when a dashboard shows a host down or missing, when checking CPU/RAM/GPU/temperature history, or right after an outage, maintenance window or notable change that should be recorded as an event.
+description: Monitoring for a dotinfra CMDB — Prometheus scrape targets generated from component `metrics:`, the Prometheus+Grafana+Pushgateway docker-compose bundle, the Fleet Overview Grafana dashboard, and the infra event log (outages, maintenance, changes, incidents, observations — Grafana annotations or events/<YYYY>.md in the CMDB). Use when adding a host to monitoring, installing node_exporter or the NVIDIA DCGM exporter, (re)deploying the monitoring stack or adopting an already-running Grafana/Prometheus, when a dashboard shows a host down or missing, when checking CPU/RAM/GPU/temperature history, or right after an outage, maintenance window or notable change that should be recorded as an event.
 ---
 
 # Infra monitoring
@@ -54,7 +54,7 @@ URL overrides).
 3. In the component file: `metrics: [node:9100]` (or `[node:9100, dcgm:9400]`),
    make sure `address` is reachable *from the monitoring host* (use the VPN
    address for roaming/remote hosts), add `fleet` to `tags` if it belongs on the
-   dashboard. History line, `updated:`.
+   dashboard. Set `updated:`; `dotinfra event add --type change` if worth remembering.
 4. `dotinfra lint && dotinfra sync`. The monitoring host's next sync rewrites
    the targets (`role = "server"`; run `dotinfra sync` there to apply it
    now). Prometheus picks them up within a minute, with no restart.
@@ -96,7 +96,7 @@ volumes outside the bundle. Then, **before** `docker compose up -d` (details:
 6. `docker compose up -d`, check `docker compose logs grafana` and
    `dotinfra monitoring where --check`. Rollback: `docker compose down`, then
    `docker start` the old containers.
-7. Record it: History line in `services/monitoring.md`, `dotinfra event add
+7. Record it: update the facts in `services/monitoring.md`, `dotinfra event add
    --type change`, and ask the user before removing the old containers/volumes.
 
 The bundle provisions its datasource as "dotinfra Prometheus" (uid
@@ -134,22 +134,34 @@ so it never needs regenerating when hosts change. Hosts without a GPU show "no G
 2. Prometheus `/targets` page shows the scrape error. Typical: firewall, exporter
    bound to localhost, wrong address for the network the monitoring host is on.
 3. From the monitoring host: `curl -s --max-time 5 http://ADDR:9100/metrics | head -3`.
-4. Record what you found in the component (Known issues / History).
+4. Record the cause as a fact in the component (`Constraints & known issues`
+   while it is open; remove it once fixed) and the outage with `dotinfra event add`.
 
-## Event log (Grafana annotations)
+## Event log
 
-Record every outage, maintenance window, notable change, incident or
-observation — the dashboard overlays them on all graphs, colour-coded by type.
+Component docs hold the current state only; *what happened* goes to the event
+log. Record every outage, maintenance window, notable change, incident or
+observation there. `[events] backend` in `.dotinfra.toml` picks where:
+
+- `grafana` — Grafana annotations; the dashboard overlays them on all graphs,
+  colour-coded by type.
+- `file` — one line per event in `events/<YYYY>.md` inside the CMDB
+  (`- 2026-09-26T07:34Z · nas · maintenance · replaced disk 2`), synced and
+  union-merged with it. For CMDBs without Grafana. Do not read these files by
+  default; use `dotinfra event list`.
+- `auto` (default) — `grafana` when a monitoring service or URL is configured,
+  else `file`.
 
 ```sh
 dotinfra event add --host nas --type maintenance --time "2026-09-26T08:00Z" --end "2026-09-26T08:40Z" "replaced disk 3"
 dotinfra event add --host gpu1 --type change "driver 560 -> 570"          # --time defaults to now
 dotinfra event add --host hub --type outage --time -2h --end now "provider network outage"
-dotinfra event list --host nas --type outage --limit 20
-dotinfra event rm ID
+dotinfra event list --host nas --type outage --since -30d --limit 20
+dotinfra event rm ID                 # Grafana: annotation id; file: YEAR.N from `event list`
 ```
 
 Types: `outage`, `maintenance`, `change`, `incident`, `observation`. `--host`
-is a component id. Events are tagged `dotinfra`, `host:<id>`, `type:<type>`.
-Always pair an event with a History line in the component file — the CMDB is
-the durable record; the annotation is its timeline view.
+is a component id. Grafana events are tagged `dotinfra`, `host:<id>`,
+`type:<type>`. The event records what happened; the component doc is updated
+in place to what is true now (never a dated History line). File-backend events
+reach other devices with `dotinfra sync`.

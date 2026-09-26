@@ -5,8 +5,8 @@ description: Handle infrastructure secrets with the dotinfra vault. Use whenever
 
 # Infra vault: key names in docs, values in the vault
 
-Components list the keys they need in `secrets: [...]` and describe them under
-`## Secrets`. Values live only in the vault (`dotinfra vault`), which is either a
+Components list the keys they need in `secrets: [...]` and name them in the
+doc's `## Access` section (what each unlocks). Values live only in the vault (`dotinfra vault`), which is either a
 0600 JSON file outside the CMDB (`file` backend) or an `age`-encrypted
 `vault.age` inside it (`age` backend, syncs with the CMDB).
 
@@ -42,9 +42,10 @@ Generating a new random credential is fine without user input:
 `openssl rand -base64 24 | dotinfra vault set KEY` (non-interactive `set` reads
 the first line of stdin). Then apply it with `vault exec`, never by pasting it.
 
-After storing or rotating: add the key to the component's `secrets:`, describe
-it under `## Secrets` (what it unlocks, not the value), add a History line
-(`- 2026-09-26 — rotated router_admin`), `dotinfra lint`, `dotinfra sync`.
+After storing or rotating: add the key to the component's `secrets:`, name
+it in the doc's `## Access` section (what it unlocks, not the value), record a
+rotation as an event (`dotinfra event add --host router --type change "rotated
+router_admin"`), then `dotinfra lint`, `dotinfra sync`.
 
 Key naming: `<component-id>_<purpose>` — `nas_sudo`, `router_admin`,
 `ha_long_lived_token`, `wg_hub_private_key`.

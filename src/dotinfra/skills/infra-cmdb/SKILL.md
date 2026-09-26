@@ -1,6 +1,6 @@
 ---
 name: infra-cmdb
-description: Read and update the user's infrastructure CMDB (a dotinfra folder of Markdown files, usually ~/.infra). Use BEFORE any task that touches servers, VMs, SSH access, networks, VPNs, DNS/domains, routers, firewalls, containers, services or home-lab devices — to look up addresses, access paths, dependencies and known issues — and AFTER every infra change or discovered drift to write reality back (frontmatter facts, prose, dated History line), then lint and sync.
+description: Read and update the user's infrastructure CMDB (a dotinfra folder of Markdown files, usually ~/.infra). Use BEFORE any task that touches servers, VMs, SSH access, networks, VPNs, DNS/domains, routers, firewalls, containers, services or home-lab devices — to look up addresses, access paths, dependencies and known issues — and AFTER every infra change or discovered drift to write reality back as current facts (edit in place; events go to `dotinfra event add`), then lint and sync.
 ---
 
 # Infra CMDB: read first, write back
@@ -21,8 +21,10 @@ infrastructure. Stale docs cause outages; treat updating it as part of the task.
 2. Read the file of every component you will touch, plus everything in its
    `depends_on`, `runs_on` and `ssh.jump`. `dotinfra show ID` prints one;
    `dotinfra ls --tag gpu --status active --json` filters.
-3. Check `## Known issues` before diagnosing — the answer is often there.
-4. Reach hosts the documented way: `ssh ID` works once the user has run
+3. Check `## Constraints & known issues` before diagnosing — the answer is often there.
+4. Leave `events/` (the event log) alone unless the task is about what happened
+   when: then `dotinfra event list --host ID [--since -30d]`.
+5. Reach hosts the documented way: `ssh ID` works once the user has run
    `dotinfra ssh-config` (it writes `ProxyJump` from `ssh.jump`).
 
 ## 2. File routing
@@ -66,29 +68,55 @@ updated: 2026-09-26          # set to today whenever you reconcile the doc
 Only this YAML subset parses: scalars, inline lists `[a, b]`, `- item` block
 lists, one-level maps. No multi-line strings, no nested maps, no lists of maps.
 
-Body sections (H2, keep names and order — sync merges per section):
-`Overview`, `Configuration`, `Access`, `Secrets`, `Known issues`, `History`.
+## 4. Documents state what IS
 
-## 4. Write back in the same turn
+A component file is a **fact sheet of the current state**. Agents load these
+files on every infra task, so every line costs context: a doc must be concise,
+current and cheap to read. History does not belong in it.
+
+Body sections (H2; keep existing names and order — sync merges per section):
+
+| section | content |
+|---|---|
+| `Overview` | 2–3 lines: what it is, where, who relies on it |
+| `Access` | how to reach it (ssh, UI, console fallback), vault key names |
+| `Configuration` (or `Hardware`, `Services`) | the facts someone acts on: paths, ports, versions, commands |
+| `Constraints & known issues` | limits and open problems; remove an issue once resolved |
+
+Length: ≈ ≤ 40 lines for a simple component, ≤ 80 for a complex one.
+`dotinfra lint` warns `journal` (a History/Changelog/Log section, or more than
+5 lines starting with a date) and `long` (body over `[lint] max_lines`).
+
+## 5. Write back in the same turn
 
 After any change you made or discovered (package installed, port opened,
 service moved, host renamed, disk failing, credential rotated):
 
 1. Update frontmatter facts that changed; set `updated:` to today.
-2. Update the prose in the matching section. State facts a stranger could act
-   on: paths, ports, versions, commands. English, concise.
-3. Prepend one line to `## History` (newest first, never edit old lines):
-   `- 2026-09-26 — raised ZFS ARC limit to 16 GB; see Configuration`
+2. **Edit the prose in place**: rewrite the line that is no longer true, delete
+   what no longer exists, remove resolved issues. Never append a dated note.
+3. Record the event, if it is worth remembering, in the event log — not in the doc:
+   `dotinfra event add --host ID --type change "raised ZFS ARC limit to 16 GB"`
+   (types: `outage`, `incident`, `maintenance`, `change`, `observation`;
+   `--time -2h`, `--end` for durations). Git history keeps old doc versions.
 4. Touched several components? Update each one (and the dependency edges).
-5. Retiring something: `status: retired` + History line. Never delete the file.
-6. Unverified or suspicious observations go under `## Known issues`, not into facts.
+5. Retiring something: `status: retired` + an event. Never delete the file.
+6. Unverified or suspicious observations go under `## Constraints & known issues`, not into facts.
 
 If reality contradicts the doc: reality wins. Fix the doc (or
-`dotinfra drift ID --update` for probed facts) and say what drifted in History.
-If the doc describes *intended* state and the host is wrong, ask the user
-before changing the host.
+`dotinfra drift ID --update` for probed facts); log notable drift with
+`dotinfra event add --type observation`. If the doc describes *intended* state
+and the host is wrong, ask the user before changing the host.
 
-## 5. Check and sync
+### Cleaning up a journal-style doc
+
+When lint reports `journal` or `long` (typical after upgrading from dotinfra
+< 0.3): fold anything still true from the History lines into the sections as
+facts, move the notable past events into the log with `dotinfra event add
+--time YYYY-MM-DD ...` (skip trivia), delete the History section and resolved
+issues, and cut detail nobody acts on. Keep every current fact.
+
+## 6. Check and sync
 
 ```sh
 dotinfra lint            # must exit 0; fix every error, read the warnings
@@ -107,4 +135,6 @@ silence them with `dotinfra:allow-secret` unless the user confirms it is not a s
 - No secret values in any CMDB file, commit message or chat — key names only.
 - Never `rsync --delete` or copy files between CMDB clones; only `dotinfra sync`.
 - `INDEX.md` is generated; edit component files instead.
-- Do not reorder or rename H2 headings of existing files.
+- Do not reorder or rename H2 headings of existing files (except when
+  converting a journal-style doc, above).
+- Docs hold the current state; history goes to `dotinfra event add`.
