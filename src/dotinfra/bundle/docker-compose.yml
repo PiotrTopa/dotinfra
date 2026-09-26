@@ -13,7 +13,7 @@ name: dotinfra-monitoring
 
 services:
   prometheus:
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.0}
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.15.0}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       # The named volume below is mounted exactly here, so TSDB history
@@ -32,13 +32,13 @@ services:
     restart: unless-stopped
 
   pushgateway:
-    image: ${PUSHGATEWAY_IMAGE:-prom/pushgateway:v1.11.1}
+    image: ${PUSHGATEWAY_IMAGE:-prom/pushgateway:v1.11.3}
     ports:
       - "${PUSHGATEWAY_PORT:-9091}:9091"
     restart: unless-stopped
 
   grafana:
-    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.2.2}
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     environment:
@@ -59,7 +59,7 @@ services:
   # Optional: metrics of the machine running this stack.
   # Enable with `--profile node`, then give that host `metrics: [node:9100]`.
   node-exporter:
-    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.9.1}
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.12.1}
     profiles: ["node"]
     command:
       - --path.rootfs=/host
