@@ -57,6 +57,16 @@ _REFERENCE_PREFIXES = ("<", "{{", "$", "%", "~", "/", "./", "../")
 _QUOTED_SPAN_RE = re.compile(r"`([^`\n]+)`|\"([^\"\n]+)\"|'([^'\n]+)'")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _H1_RE = re.compile(r"^# \S", re.MULTILINE)
+# Component docs state what *is*; history belongs in the event log (`dotinfra event add`).
+JOURNAL_HEADING_RE = re.compile(
+    r"^##\s+(?:history|change\s?log|logs?|event\s+history|historical\b.*)\s*#*\s*$",
+    re.IGNORECASE)
+_DATED_LINE_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+\.\s+)?(?:\*\*|`)?\d{4}-\d{2}-\d{2}\b")
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+MAX_DATED_LINES = 5
+DEFAULT_MAX_LINES = 120
+JOURNAL_HINT = ("component docs state current facts only: move history to "
+                "`dotinfra event add`, keep what is true now")
 
 
 @dataclass
@@ -73,6 +83,52 @@ def format_issue(issue: Issue) -> str:
 
 
 # --------------------------------------------------------------------------- component rules
+
+
+def _body_offset(c: Component) -> int:
+    """File line number of the body's first line."""
+    try:
+        text = c.path.read_text(encoding="utf-8").replace("\r\n", "\n").lstrip("\ufeff")
+    except (OSError, UnicodeError):
+        return 1
+    return max(1, text.count("\n") - c.body.count("\n") + 1)
+
+
+def _check_shape(c: Component, max_lines: int) -> list[Issue]:
+    """``journal`` and ``long`` warnings: a doc is a concise fact sheet, not a log."""
+    issues: list[Issue] = []
+    offset = _body_offset(c)
+    lines = c.body.splitlines()
+    in_fence = False
+    dated: list[int] = []
+    for index, line in enumerate(lines):
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if JOURNAL_HEADING_RE.match(line):
+            issues.append(Issue("warning", c.rel(), offset + index,
+                                f"history section {line.strip()!r}; {JOURNAL_HINT}", "journal"))
+        elif _DATED_LINE_RE.match(line):
+            dated.append(offset + index)
+    if len(dated) > MAX_DATED_LINES:
+        issues.append(Issue("warning", c.rel(), dated[0],
+                            f"{len(dated)} lines start with a date; {JOURNAL_HINT}", "journal"))
+    body_lines = len(c.body.strip("\n").splitlines())
+    if max_lines and body_lines > max_lines:
+        issues.append(Issue("warning", c.rel(), offset,
+                            f"body is {body_lines} lines (limit {max_lines}, [lint] max_lines); "
+                            "agents read it on every task: keep current facts, drop history "
+                            "and detail nobody acts on", "long"))
+    return issues
+
+
+def _max_lines(config: Config) -> int:
+    try:
+        return int(config.get("lint", "max_lines", DEFAULT_MAX_LINES))
+    except (TypeError, ValueError):
+        raise DotinfraError("[lint] max_lines in .dotinfra.toml is not a number") from None
 
 
 def _check_component(c: Component, ids: set[str], today: date, strict: bool) -> list[Issue]:
@@ -261,8 +317,10 @@ def run_lint(root: Path, config: Config, strict: bool = False,
     components, errors = scan_cmdb(root)
     issues = [Issue("error", e.source or "?", e.line or 1, e.message, "parse") for e in errors]
     ids = {c.id for c in components}
+    max_lines = _max_lines(config)
     for c in components:
         issues += _check_component(c, ids, today, strict)
+        issues += _check_shape(c, max_lines)
     issues += _duplicate_ids(components)
     keys = _vault_keys(config)
     if keys is not None:
@@ -294,7 +352,8 @@ def register(subparsers) -> None:
         "lint", help="check schema, references and leaked secrets",
         description="Check every component: frontmatter syntax, required fields, ids, "
                     "references (ssh.jump, depends_on, runs_on), metrics, staleness, vault keys, "
-                    "and secret-looking text in any tracked file. Exits 1 on errors.")
+                    "journal-style history and overlong docs (warnings), and secret-looking "
+                    "text in any tracked file. Exits 1 on errors.")
     parser.add_argument("--strict", action="store_true", help="also warn about unknown keys")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.set_defaults(func=cmd_lint)

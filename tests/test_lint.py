@@ -239,6 +239,56 @@ class WarningRulesTest(LintTestCase):
         self.assertEqual([i for i in self.issues() if i.rule == "vault"], [])
 
 
+class ShapeRulesTest(LintTestCase):
+    """`journal` and `long`: component docs are concise fact sheets (warnings only)."""
+
+    def test_history_heading_is_journal(self):
+        for heading in ("History", "Changelog", "Change log", "Log", "Event history",
+                        "Historical notes"):
+            with self.subTest(heading=heading):
+                self.add("servers/a.md", GOOD.format(id="a"),
+                         f"# a\n\n## Overview\n\nbox\n\n## {heading}\n\n- 2026-01-01 — x\n")
+                found = [i for i in self.issues() if i.rule == "journal"]
+                self.assertEqual(len(found), 1)
+                self.assertEqual((found[0].level, found[0].line), ("warning", 14))
+                self.assertIn("dotinfra event add", found[0].message)
+
+    def test_known_issues_and_prose_dates_are_fine(self):
+        body = ("# a\n\n## Constraints & known issues\n\n- TLS cert expires 2026-12-01\n"
+                "- 2026-10-01: warranty ends\n\n```\n2026-01-01 a\n2026-01-02 b\n"
+                "2026-01-03 c\n2026-01-04 d\n2026-01-05 e\n2026-01-06 f\n```\n")
+        self.add("servers/a.md", GOOD.format(id="a"), body)
+        self.assertEqual([i for i in self.issues() if i.rule in ("journal", "long")], [])
+
+    def test_many_dated_lines_are_journal(self):
+        lines = "".join(f"- 2026-0{n}-01 — did {n}\n" for n in range(1, 7))
+        self.add("servers/a.md", GOOD.format(id="a"), f"# a\n\n## Notes\n\n{lines}")
+        found = [i for i in self.issues() if i.rule == "journal"]
+        self.assertEqual(len(found), 1)
+        self.assertIn("6 lines start with a date", found[0].message)
+        self.add("servers/a.md", GOOD.format(id="a"),
+                 f"# a\n\n## Notes\n\n{''.join(lines.splitlines(True)[:5])}")
+        self.assertEqual([i for i in self.issues() if i.rule == "journal"], [])
+
+    def test_long_body_and_configurable_limit(self):
+        body = "# a\n\n" + "".join(f"- fact {n}\n" for n in range(130))
+        self.add("servers/a.md", GOOD.format(id="a"), body)
+        found = [i for i in self.issues() if i.rule == "long"]
+        self.assertEqual([(i.level, i.line) for i in found], [("warning", 7)])
+        self.assertIn("132 lines (limit 120", found[0].message)
+        from dotinfra.config import set_toml_value
+        set_toml_value(self.root / ".dotinfra.toml", "lint", "max_lines", 200)
+        self.assertEqual([i for i in self.issues() if i.rule == "long"], [])
+        set_toml_value(self.root / ".dotinfra.toml", "lint", "max_lines", 20)
+        self.assertEqual(len([i for i in self.issues() if i.rule == "long"]), 1)
+
+    def test_warnings_do_not_fail_lint(self):
+        self.add("servers/a.md", GOOD.format(id="a"), "# a\n\n## History\n\n- 2026-01-01 — x\n")
+        code, out, _ = run_cli("--root", self.root, "lint")
+        self.assertEqual(code, 0)
+        self.assertIn("[journal]", out)
+
+
 class LintCliTest(LintTestCase):
     def test_exit_codes_and_json(self):
         self.add("servers/a.md", GOOD.format(id="a"))
