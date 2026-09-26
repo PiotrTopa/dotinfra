@@ -11,6 +11,7 @@ A component file is merged as structured data rather than as lines:
 
 from __future__ import annotations
 
+import difflib
 import re
 import subprocess
 import sys
@@ -61,10 +62,56 @@ def merge_lines(base: str, ours: str, theirs: str) -> MergeResult:
             paths.append(str(path))
         result = subprocess.run(
             ["git", "merge-file", "-p", "-L", OURS, "-L", BASE, "-L", THEIRS, *paths],
-            capture_output=True, text=True)
+            capture_output=True, encoding="utf-8")
     if result.returncode < 0 or result.returncode > 127:
         raise RuntimeError(f"git merge-file failed: {result.stderr.strip()}")
     return MergeResult(result.stdout, result.returncode)
+
+
+def _additions(base: list[str], side: list[str]) -> dict[int, list[str]] | None:
+    """Lines ``side`` inserted before each base index (``len(base)`` = appended).
+
+    ``None`` when ``side`` also deleted or changed base lines.
+    """
+    inserts: dict[int, list[str]] = {}
+    for tag, i1, _i2, j1, j2 in difflib.SequenceMatcher(None, base, side,
+                                                         autojunk=False).get_opcodes():
+        if tag == "insert":
+            inserts[i1] = side[j1:j2]
+        elif tag != "equal":
+            return None
+    return inserts
+
+
+def _join_blocks(first: list[str], second: list[str]) -> list[str]:
+    """Two blocks added at the same spot, without doubling the blank lines around them."""
+    if first == second:
+        return first
+    first, second = list(first), list(second)
+    while first and second and first[-1].strip() == "" and second[-1].strip() == "":
+        first.pop()
+    while first and second and first[0].strip() == "" and second[0].strip() == "":
+        second.pop(0)
+    return first + second
+
+
+def merge_additions(base: str, ours: str, theirs: str) -> str | None:
+    """When both sides only *added* lines, keep every addition (ours first at a shared spot).
+
+    Returns ``None`` when either side deleted or rewrote a base line; that case is
+    left to the line-level merge, which may legitimately conflict.
+    """
+    base_lines = base.splitlines(keepends=True)
+    sides = [_additions(base_lines, side.splitlines(keepends=True)) for side in (ours, theirs)]
+    if sides[0] is None or sides[1] is None:
+        return None
+    out: list[str] = []
+    for index in range(len(base_lines) + 1):
+        blocks = [side[index] for side in sides if index in side]
+        out += _join_blocks(*blocks) if len(blocks) == 2 else (blocks[0] if blocks else [])
+        if index < len(base_lines):
+            out.append(base_lines[index])
+    return "".join(out)
 
 
 # --------------------------------------------------------------------------- frontmatter
@@ -79,7 +126,10 @@ def _merge_value(key: str, base, ours, theirs):
     if theirs == base:
         return ours, False
     if key == "updated" and _ABSENT not in (ours, theirs):
-        return max(str(ours), str(theirs)), False
+        if ours is None or theirs is None:
+            return (theirs if ours is None else ours), False
+        if isinstance(ours, str) and isinstance(theirs, str):
+            return max(ours, theirs), False
     if isinstance(ours, list) and isinstance(theirs, list):
         base_items = base if isinstance(base, list) else []
         merged = [x for x in ours if not (x in base_items and x not in theirs)]
@@ -200,6 +250,9 @@ def _merge_section(key: str | None, base: str | None, ours: str | None,
         return _markers(_nl(ours or ""), _nl(theirs or "")), 1
     if _is_history(key):
         return merge_history(base or "", ours, theirs), 0
+    added = merge_additions(_nl(base or ""), _nl(ours), _nl(theirs))
+    if added is not None:
+        return added, 0
     result = merge_lines(base or "", _nl(ours), _nl(theirs))
     return result.text, result.conflicts
 
@@ -254,14 +307,20 @@ def merge_text(base: str, ours: str, theirs: str) -> MergeResult:
 
 
 def merge_driver(base: Path, ours: Path, theirs: Path, path: str = "") -> int:
-    """git merge driver: merge into ``ours`` in place; 0 = clean, 1 = conflicts remain."""
-    texts = [p.read_text(encoding="utf-8") for p in (base, ours, theirs)]
+    """git merge driver: merge into ``ours`` in place; 0 = clean, 1 = conflicts remain.
+
+    Anything the section-aware merge cannot handle (non-UTF-8 content, an I/O error)
+    falls back to git's own line merge of the same three files, so the driver never
+    fails harder than git would without it.
+    """
     try:
-        result = merge_text(*texts)
+        result = merge_text(*(p.read_text(encoding="utf-8") for p in (base, ours, theirs)))
     except (RuntimeError, OSError, UnicodeError) as exc:
-        print(f"dotinfra merge-driver: {path or ours}: {exc}; falling back to line merge",
+        print(f"dotinfra merge-driver: {path or ours}: {exc}; falling back to git merge-file",
               file=sys.stderr)
-        result = merge_lines(*texts)
+        code = subprocess.run(["git", "merge-file", "-L", OURS, "-L", BASE, "-L", THEIRS,
+                               str(ours), str(base), str(theirs)]).returncode
+        return 0 if code == 0 else 1
     ours.write_text(result.text, encoding="utf-8")
     return 0 if result.clean else 1
 

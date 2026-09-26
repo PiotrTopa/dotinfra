@@ -87,6 +87,14 @@ class FrontmatterMergeTest(unittest.TestCase):
         self.assertIn("<<<<<<< ours\nstatus: degraded\n=======\nstatus: retired\n"
                       ">>>>>>> theirs\n", result.text)
 
+    def test_updated_emptied_on_one_side_takes_the_date(self):
+        ours = edit(BASE, ("updated: 2026-09-01", "updated:"))
+        theirs = edit(BASE, ("updated: 2026-09-01", "updated: 2026-09-10"))
+        self.assertEqual(self.merged_meta(ours, theirs)["updated"], "2026-09-10")
+        self.assertEqual(self.merged_meta(theirs, ours)["updated"], "2026-09-10")
+        ours = edit(BASE, ("updated: 2026-09-01", "updated: 7"))
+        self.assertEqual(merge_text(BASE, ours, theirs).conflicts, 1)
+
 
 class BodyMergeTest(unittest.TestCase):
     def test_different_sections_merge(self):
@@ -132,6 +140,30 @@ class BodyMergeTest(unittest.TestCase):
         theirs = edit(BASE, ("## Known issues\n", "## Known issues\n\n- new issue\n"))
         result = merge_text(BASE, ours, theirs)
         self.assertEqual(result.conflicts, 1)  # deleted vs modified needs a human
+
+    def test_both_sides_only_added_lines_keeps_both(self):
+        # The most common concurrent edit: two devices each append a bullet to the
+        # same (possibly empty) section. Line merge would call the adjacent additions
+        # a conflict; dotinfra keeps both, ours first.
+        ours = edit(BASE, ("## Known issues\n", "## Known issues\n\n- fan noisy\n"))
+        theirs = edit(BASE, ("## Known issues\n", "## Known issues\n\n- disk 3 SMART warnings\n"))
+        result = merge_text(BASE, ours, theirs)
+        self.assertTrue(result.clean, result.text)
+        self.assertIn("## Known issues\n\n- fan noisy\n- disk 3 SMART warnings\n\n## History\n",
+                      result.text)
+        ours = edit(BASE, ("- certbot\n", "- certbot\n- fail2ban\n"))
+        theirs = edit(BASE, ("- certbot\n", "- certbot\n- unattended-upgrades\n"),
+                      ("- nginx 1.24\n", "- nginx 1.24\n- brotli module\n"))
+        result = merge_text(BASE, ours, theirs)
+        self.assertTrue(result.clean, result.text)
+        self.assertIn("- nginx 1.24\n- brotli module\n- port 443\n- certbot\n- fail2ban\n"
+                      "- unattended-upgrades\n", result.text)
+
+    def test_modified_plus_added_still_conflicts_when_adjacent(self):
+        ours = edit(BASE, ("- certbot\n", "- acme.sh\n"))
+        theirs = edit(BASE, ("- certbot\n", "- certbot\n- fail2ban\n"))
+        result = merge_text(BASE, ours, theirs)
+        self.assertEqual(result.conflicts, 1)
 
     def test_headings_inside_code_fences_are_not_sections(self):
         body = "# t\n\n## Real\n\n```md\n## not a heading\n```\n"
@@ -198,6 +230,16 @@ class DriverTest(unittest.TestCase):
         base = "# Rules\n\n## A\n\nx\n\n## B\n\ny\n"
         code, text = self.run_driver(base, base.replace("x", "x2"), base.replace("y", "y2"))
         self.assertEqual((code, text), (0, "# Rules\n\n## A\n\nx2\n\n## B\n\ny2\n"))
+
+    def test_non_utf8_input_falls_back_to_git_without_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = [Path(tmp) / name for name in ("O", "A", "B")]
+            paths[0].write_bytes(b"caf\xe9\nl2\nl3\nl4\nl5\n")
+            paths[1].write_bytes(b"caf\xe9\nours\nl3\nl4\nl5\n")
+            paths[2].write_bytes(b"caf\xe9\nl2\nl3\nl4\ntheirs\n")
+            code = merge_driver(*paths, path="servers/x.md")
+            self.assertEqual(code, 0)
+            self.assertEqual(paths[1].read_bytes(), b"caf\xe9\nours\nl3\nl4\ntheirs\n")
 
 
 if __name__ == "__main__":
