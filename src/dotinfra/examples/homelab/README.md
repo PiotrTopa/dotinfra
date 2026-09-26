@@ -5,7 +5,7 @@
 > `dotinfra init --example` and edit from there. This note sits outside the
 > `dotinfra:managed` markers, so `dotinfra migrate` keeps it.
 
-<!-- dotinfra:managed:start v=0.2.0 -->
+<!-- dotinfra:managed:start v=0.2.2 -->
 # homelab infrastructure
 
 This repository is a [dotinfra](https://github.com/PiotrTopa/dotinfra) CMDB: a
@@ -36,14 +36,13 @@ Needs **dotinfra ≥ 0.2.0**, Python ≥ 3.11, `git` and `ssh`.
    GitHub Copilot, Cline, Antigravity, Codex, Gemini CLI — detected
    automatically; `--target all` for every one).
 
-5. **Vault access** — this CMDB uses the **file** vault backend.
-   - `file`: secrets live outside the repository (`~/.config/dotinfra/vault.json`).
-     Copy that file from an existing device over a trusted channel, or
-     `dotinfra vault import FILE`.
-   - `age`: the encrypted `vault.age` is in this repository. Run
-     `dotinfra vault identity` and `dotinfra sync` here, then on a device that
-     can already decrypt: `dotinfra sync && dotinfra vault rekey && dotinfra sync`;
-     finally `dotinfra sync` here again.
+5. **Vault access** — this CMDB uses the **file** vault backend: the secrets
+   live in `~/.config/dotinfra/vault.json` on each device (mode 0600, not
+   synced). Copy that file from an existing device over a trusted channel, or
+   `dotinfra vault import FILE`. To share them through this repository instead:
+   `dotinfra vault migrate --to age`. A device can override the vault paths in
+   `.dotinfra.local.toml`; `dotinfra migrate` refreshes this step when
+   `[vault]` changes.
 
 6. **Optional: sync automatically**: `dotinfra timer install` (every 15 min).
 

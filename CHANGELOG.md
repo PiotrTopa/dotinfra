@@ -6,6 +6,50 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-09-26
+
+Fixes found while adopting dotinfra on an already-running Prometheus/Grafana stack.
+Upgrade with `dotinfra upgrade` (it runs `dotinfra migrate`, which refreshes the
+README's vault step), then `dotinfra sync`.
+
+### Fixed
+
+- **Grafana downgrade trap.** Adopting an existing Grafana volume with the bundle's
+  older pinned image could corrupt a database written by a newer Grafana. New
+  "Adopting an existing stack" section in [docs/monitoring.md](docs/monitoring.md)
+  and the bundle README (pin `GRAFANA_IMAGE` to the running version, reuse volumes
+  as `external:` in `docker-compose.override.yml`, copy an anonymous TSDB volume
+  with Prometheus stopped, keep the old stack stopped for rollback).
+  `monitoring render` and `setup-server` warn when docker already has
+  Grafana/Prometheus containers or volumes outside the bundle (only when `docker`
+  is on PATH; never an error; silent once the override file exists).
+- **Datasource name collision.** On a Grafana that already had a datasource named
+  "Prometheus", the bundle's provisioning failed ("data source not found") and
+  Grafana restarted in a loop. The provisioned datasource is now
+  "dotinfra Prometheus" (uid `dotinfra-prometheus` unchanged) with
+  `isDefault: false`; the fleet dashboard selects it by uid.
+- **CMDB README vault step** named `~/.config/dotinfra/vault.json` whatever
+  `[vault]` said. It now shows the configured backend and paths, and `migrate`
+  refreshes it. Managed files are rendered from the shared `.dotinfra.toml` only,
+  never from a device's `.dotinfra.local.toml`.
+- **Lint missed Markdown password notations** such as ``Pass: `...` ``,
+  ``Password `...` `` or ``password set to `...` ``. A quoted or backticked value
+  right after pass/passwd/password/pwd/passphrase/pin/token/secret/api key (with
+  `:`, `=`, `is` or `set to`; required for the everyday words pin, pass, token,
+  secret, api key) is now an error, as are JSON-style `"password": "..."` keys.
+  Vault references, placeholders, paths, `$VARS`, `passwordless` and
+  `PasswordAuthentication` are not flagged. The `password: value` rule also
+  accepts paths and `$VARS` as references now.
+
+### Changed
+
+- Bundle image pins: `grafana/grafana:13.2.2`, `prom/prometheus:v3.15.0`,
+  `prom/pushgateway:v1.11.3`, `prom/node-exporter:v1.12.1` (DCGM unchanged).
+  `render` keeps any bundle file that differs from the packaged one, so a bundle
+  rendered by an earlier release keeps its old pins and datasource name until
+  `render --force` (which also discards local edits to those files). `.env`
+  overrides (`GRAFANA_IMAGE=...`) always win.
+
 ## [0.2.1] — 2026-09-26
 
 ### Added
@@ -127,8 +171,9 @@ First public release.
   Grafana annotations (`event add|list|rm`).
 - Fictional example CMDB `examples/homelab`.
 
-[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/PiotrTopa/dotinfra/releases/tag/v0.2.1
+[Unreleased]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/PiotrTopa/dotinfra/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PiotrTopa/dotinfra/releases/tag/v0.1.0

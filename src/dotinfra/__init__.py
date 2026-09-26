@@ -1,6 +1,6 @@
 """dotinfra: a self-maintaining Markdown infrastructure CMDB for humans and AI agents."""
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 class DotinfraError(Exception):
