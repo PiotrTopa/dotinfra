@@ -29,6 +29,10 @@ class FakeComponent:
         return self.meta.get("address")
 
     @property
+    def ssh(self):
+        return self.meta.get("ssh") or {}
+
+    @property
     def metrics(self):
         out = []
         for entry in self.meta.get("metrics") or []:

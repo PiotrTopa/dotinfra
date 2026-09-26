@@ -25,43 +25,15 @@ CUSTOM_PREFIX = "custom-"
 
 # ---------------------------------------------------------------- pure helpers
 
-def _meta(c) -> dict:
-    return getattr(c, "meta", None) or {}
-
-
 def component_address(c) -> str | None:
     """Scrape address of a component: ``address``, else ``ssh.host``."""
-    addr = getattr(c, "address", None) or _meta(c).get("address")
-    if addr:
-        return str(addr)
-    ssh = _meta(c).get("ssh")
-    if isinstance(ssh, dict) and ssh.get("host"):
-        return str(ssh["host"])
-    return None
-
-
-def _metrics(c) -> list[tuple[str, int]]:
-    try:
-        return list(c.metrics)
-    except (ValueError, TypeError, AttributeError):
-        return []
-
-
-def _tags(c) -> list[str]:
-    tags = getattr(c, "tags", None)
-    if tags is None:
-        tags = _meta(c).get("tags") or []
-    return [str(t) for t in tags]
-
-
-def _status(c) -> str | None:
-    status = getattr(c, "status", None)
-    return status if status is not None else _meta(c).get("status")
+    addr = c.address or c.ssh.get("host")
+    return str(addr) if addr else None
 
 
 def host_role(c) -> str:
     """``fleet`` for components tagged ``fleet`` (dashboard rows), else ``infra``."""
-    return "fleet" if "fleet" in _tags(c) else "infra"
+    return "fleet" if "fleet" in c.tags else "infra"
 
 
 def build_targets(components) -> tuple[dict[str, list[dict]], list[str]]:
@@ -74,10 +46,8 @@ def build_targets(components) -> tuple[dict[str, list[dict]], list[str]]:
     jobs: dict[str, list[dict]] = {}
     warnings: list[str] = []
     for c in components:
-        metrics = _metrics(c)
-        if not metrics:
-            continue
-        if _status(c) not in SCRAPED_STATUSES:
+        metrics = c.metrics
+        if not metrics or c.status not in SCRAPED_STATUSES:
             continue
         addr = component_address(c)
         if not addr:

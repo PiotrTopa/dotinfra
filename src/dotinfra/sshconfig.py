@@ -71,7 +71,8 @@ def cmd_ssh_config(args) -> int:
         path = Path(args.output).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         path.write_text(text, encoding="utf-8")
-        print(f"wrote {text.count('\nHost ')} host(s) to {path}")
+        hosts = sum(line.startswith("Host ") for line in text.splitlines())
+        print(f"wrote {hosts} host(s) to {path}")
         print(f"add `Include {args.output}` near the top of ~/.ssh/config if it is not there")
     else:
         sys.stdout.write(text)
