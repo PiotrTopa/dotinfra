@@ -65,6 +65,9 @@ def _check_component(c: Component, ids: set[str], today: date, strict: bool) -> 
         add("error", "kind", f"kind {c.meta.get('kind')!r} does not match folder "
                              f"({c.kind!r})", "kind")
     _check_references(c, ids, add)
+    for field, reason in c.unsafe_values():
+        add("error", field.split(".")[0], f"{field} {reason}; it would be unsafe in ssh_config "
+                                          "or on the ssh command line", "unsafe")
     for entry in as_list(c.meta.get("metrics")):
         if parse_metric(entry) is None:
             add("error", "metrics", f"malformed metrics entry {entry!r} (expected job:port)",

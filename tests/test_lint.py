@@ -76,6 +76,13 @@ class ErrorRulesTest(LintTestCase):
         self.assertTrue(any("runs_on" in m for m in messages))
         self.assertTrue(any("duplicate id 'b'" in m for m in messages))
 
+    def test_unsafe_ssh_and_address_values(self):
+        self.add("servers/a.md", GOOD.format(id="a") + '    ssh:\n      host: "x\\ny"\n')
+        self.add("servers/b.md", GOOD.format(id="b") + "    address: -oProxyCommand=x\n")
+        self.add("servers/c.md", GOOD.format(id="c") + "    ssh:\n      port: 22 or 2222\n")
+        self.assertEqual(self.rules(), [("servers/a.md", "unsafe"), ("servers/b.md", "unsafe"),
+                                        ("servers/c.md", "unsafe")])
+
     def test_error_line_numbers(self):
         self.add("servers/a.md", "id: a\nrole: r\nstatus: nope\nupdated: 2026-09-01")
         issue = next(i for i in self.issues() if i.rule == "status")
@@ -99,7 +106,8 @@ class SecretScanTest(LintTestCase):
         self.add("servers/a.md", GOOD.format(id="a"), "# A\n\n" + "\n".join(leaks) + "\n")
         self.write(self.root, "notes.txt", "password = letmein\n")
         found = self.secret_lines()
-        self.assertEqual(found, [("notes.txt", 1)] + [("servers/a.md", n) for n in range(10, 17)])
+        self.assertEqual(found, [("notes.txt", 1)]
+                         + [("servers/a.md", n) for n in range(10, 10 + len(leaks))])
 
     def test_allowed_forms(self):
         body = "\n".join([

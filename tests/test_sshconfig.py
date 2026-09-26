@@ -44,6 +44,19 @@ class SshConfigTest(IsolatedTestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("ghost", warnings[0])
 
+    def test_unsafe_values_are_skipped_with_a_warning(self):
+        # A quoted "\n" in frontmatter would otherwise smuggle a ProxyCommand line
+        # into ssh_config; a leading "-" would become an ssh option in `dotinfra drift`.
+        self.write(self.root, "servers/evil.md", component(
+            'status: active\naddress: 10.0.0.3\nssh:\n  host: "10.0.0.3\\nProxyCommand evil"'))
+        self.write(self.root, "servers/dash.md", component(
+            "status: active\naddress: -oProxyCommand=evil\nssh:\n  user: alice"))
+        text, warnings = render_ssh_config(load_cmdb(self.root), self.root)
+        self.assertNotIn("ProxyCommand evil", text)
+        self.assertNotIn("Host evil", text)
+        self.assertNotIn("Host dash", text)
+        self.assertEqual(len([w for w in warnings if "unsafe" in w]), 2)
+
     def test_cli_output_file(self):
         target = self.home / ".ssh/config.d/dotinfra"
         code, out, err = run_cli("--root", self.root, "ssh-config", "--output", target)

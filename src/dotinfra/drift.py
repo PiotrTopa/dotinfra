@@ -85,6 +85,8 @@ class DriftReport:
 
 def _destination(component: Component) -> tuple[str, str | None]:
     """``(user@host, port)`` for a component's ssh settings."""
+    for field, reason in component.unsafe_values():
+        raise DotinfraError(f"{component.id}: {field} {reason}; unsafe for ssh, refusing")
     ssh = component.ssh
     host = str(ssh.get("host") or component.address or "")
     if not host:

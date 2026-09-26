@@ -100,6 +100,12 @@ class ProbeTest(DriftTestCase):
         facts |= {"os": "Debian GNU/Linux 13 (trixie)", "ips": ["10.0.0.7"]}
         self.assertEqual([d.field for d in compare(web1, facts)], ["os", "address"])
 
+    def test_unsafe_ssh_values_are_refused(self):
+        self.write(self.root, "servers/dash.md", component(
+            "status: active\naddress: 10.0.0.8\nssh:\n  user: -oProxyCommand=evil"))
+        with self.assertRaisesRegex(DotinfraError, "unsafe"):
+            ssh_command(self.components()["dash"], self.components())
+
 
 class DriftCliTest(DriftTestCase):
     def run_drift(self, *argv, output=PROBE_OUTPUT, error=None):

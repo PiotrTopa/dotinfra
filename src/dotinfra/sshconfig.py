@@ -49,6 +49,12 @@ def render_ssh_config(components: list[Component], root: Path,
     out = [HEADER.format(root=root, include=include)]
     warnings: list[str] = []
     for component in hosts:
+        unsafe = component.unsafe_values()
+        if unsafe:
+            known.discard(component.id)
+            warnings += [f"{component.rel()}: {field} {reason}; unsafe, Host block omitted"
+                         for field, reason in unsafe]
+            continue
         lines, block_warnings = host_block(component, known)
         out.append(f"# {component.title} ({component.rel()})\n" + "\n".join(lines) + "\n")
         warnings += block_warnings
@@ -65,7 +71,7 @@ def cmd_ssh_config(args) -> int:
         path = Path(args.output).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         path.write_text(text, encoding="utf-8")
-        print(f"wrote {len(ssh_hosts(ctx.components()))} host(s) to {path}")
+        print(f"wrote {text.count('\nHost ')} host(s) to {path}")
         print(f"add `Include {args.output}` near the top of ~/.ssh/config if it is not there")
     else:
         sys.stdout.write(text)

@@ -17,6 +17,7 @@ KNOWN_KEYS = ("id", "kind", "title", "status", "role", "tags", "address", "os", 
               "metrics", "secrets", "depends_on", "runs_on", "url", "facts", "updated")
 SSH_KEYS = ("user", "host", "port", "jump", "key")
 _H1_RE = re.compile(r"^# +(.+?)\s*#*\s*$", re.MULTILINE)
+_UNSAFE_RE = re.compile(r"[\s\x00-\x1f\x7f]")
 
 
 def as_list(value) -> list:
@@ -24,6 +25,21 @@ def as_list(value) -> list:
     if value is None:
         return []
     return list(value) if isinstance(value, (list, tuple)) else [value]
+
+
+def unsafe_reason(value) -> str | None:
+    """Why ``value`` must not be handed to ssh or written into ssh_config; ``None`` if fine.
+
+    Component files travel between devices, so a value like ``-oProxyCommand=...``
+    or ``host\\nProxyCommand ...`` (a quoted newline) must never become an ssh option
+    or an ssh_config directive.
+    """
+    text = str(value)
+    if text.startswith("-"):
+        return "starts with '-' (ssh would read it as an option)"
+    if _UNSAFE_RE.search(text):
+        return "contains whitespace or control characters"
+    return None
 
 
 def parse_metric(entry) -> tuple[str, int] | None:
@@ -70,6 +86,16 @@ class Component:
     @property
     def metrics(self) -> list[tuple[str, int]]:
         return [m for m in map(parse_metric, as_list(self.meta.get("metrics"))) if m]
+
+    def unsafe_values(self) -> list[tuple[str, str]]:
+        """``(field, reason)`` for every ``address``/``ssh.*`` value unsafe for ssh."""
+        values = [("address", self.address)] + [(f"ssh.{k}", v) for k, v in self.ssh.items()]
+        found = []
+        for field, value in values:
+            reason = None if value in (None, "") else unsafe_reason(value)
+            if reason:
+                found.append((field, reason))
+        return found
 
     def rel(self) -> str:
         try:
